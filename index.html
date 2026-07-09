@@ -138,7 +138,21 @@
   .detail-head h1{ font-size:20px; margin:0 0 2px; }
   .detail-head .client{ font-size:13px; color:var(--text-muted); margin-bottom:10px; }
 
-  .status-select{ width:auto; display:inline-block; font-size:12px; font-weight:700; padding:5px 10px; border-radius:20px; border:1px solid var(--border); margin-bottom:18px; }
+  .status-select{ width:auto; display:inline-block; font-size:12px; font-weight:700; padding:5px 10px; border-radius:20px; border:1px solid var(--border); margin-bottom:14px; }
+
+  .key-dates{
+    display:flex; gap:10px; flex-wrap:wrap; background:var(--surface); border:1px solid var(--border);
+    border-radius:10px; padding:12px; margin-bottom:6px;
+  }
+  .key-date-field{ flex:1; min-width:110px; }
+  .key-date-field label{ margin-bottom:3px; }
+  .key-date-field input{ font-size:13px; padding:8px 10px; }
+  .key-dates-hint{ font-size:12px; color:var(--text-muted); margin:6px 0 18px; }
+
+  .phase-lock-note{ font-size:11.5px; color:var(--text-muted); font-style:italic; }
+  details.phase.locked summary{ opacity:.75; }
+  .checkbox.locked{ cursor:not-allowed; opacity:.4; }
+  .task-row.locked .task-text{ color:var(--text-muted); }
 
   details.phase{
     background:var(--surface); border:1px solid var(--border); border-radius:12px;
@@ -265,6 +279,21 @@
         <h1 id="detail-address"></h1>
         <div class="client" id="detail-client"></div>
         <select class="status-select" id="detail-status"></select>
+        <div class="key-dates">
+          <div class="key-date-field">
+            <label>Listing (Go-Live) Date</label>
+            <input type="date" id="key-listing-date" />
+          </div>
+          <div class="key-date-field">
+            <label>Contract Date</label>
+            <input type="date" id="key-contract-date" />
+          </div>
+          <div class="key-date-field">
+            <label>Closing Date</label>
+            <input type="date" id="key-closing-date" />
+          </div>
+        </div>
+        <p class="key-dates-hint">Setting these auto-fills due dates for every task tied to them — no need to set dates one by one.</p>
       </div>
       <div id="phase-container"></div>
     </div>
@@ -500,6 +529,20 @@ async function openTransaction(id){
     await db.from('transactions').update({ status: sel.value }).eq('id', id);
   };
 
+  $('key-listing-date').value = t.listing_date || '';
+  $('key-contract-date').value = t.contract_date || '';
+  $('key-closing-date').value = t.closing_date || '';
+
+  $('key-listing-date').onchange = () => saveKeyDate('listing_date', $('key-listing-date').value);
+  $('key-contract-date').onchange = () => saveKeyDate('contract_date', $('key-contract-date').value);
+  $('key-closing-date').onchange = () => saveKeyDate('closing_date', $('key-closing-date').value);
+
+  await loadTasks();
+}
+
+async function saveKeyDate(column, value){
+  await db.from('transactions').update({ [column]: value || null }).eq('id', currentTxnId);
+  await db.rpc('recalc_transaction_due_dates', { p_transaction_id: currentTxnId });
   await loadTasks();
 }
 
@@ -513,19 +556,23 @@ function renderPhases(){
   const container = $('phase-container');
   container.innerHTML = '';
 
+  let previousPhaseComplete = true; // phase 1 is always unlocked
+
   PHASES.forEach(([num, name]) => {
     const phaseTasks = currentTasks.filter(t => t.phase_number === num);
     const done = phaseTasks.filter(t => t.status === 'done').length;
+    const isLocked = !previousPhaseComplete;
+    const thisPhaseComplete = phaseTasks.length === 0 || done === phaseTasks.length;
 
     const details = document.createElement('details');
-    details.className = 'phase';
-    if (phaseTasks.some(t => t.status !== 'done')) details.open = false;
+    details.className = 'phase' + (isLocked ? ' locked' : '');
 
     const summary = document.createElement('summary');
     summary.innerHTML = `
       <div class="phase-left">
         <span class="keytag">${num}</span>
         <span class="phase-name">${name}</span>
+        ${isLocked ? '<span class="phase-lock-note">&#128274; Finish Phase ' + (num-1) + ' first</span>' : ''}
       </div>
       <div style="display:flex;align-items:center;gap:8px;">
         <span class="phase-count">${done}/${phaseTasks.length}</span>
@@ -537,7 +584,7 @@ function renderPhases(){
     const taskList = document.createElement('div');
     taskList.className = 'task-list';
 
-    phaseTasks.forEach(task => taskList.appendChild(renderTaskRow(task)));
+    phaseTasks.forEach(task => taskList.appendChild(renderTaskRow(task, isLocked)));
 
     const addRow = document.createElement('div');
     addRow.className = 'add-task-row';
@@ -547,17 +594,25 @@ function renderPhases(){
 
     details.appendChild(taskList);
     container.appendChild(details);
+
+    previousPhaseComplete = thisPhaseComplete;
   });
 }
 
-function renderTaskRow(task){
+function renderTaskRow(task, isLocked){
   const row = document.createElement('div');
-  row.className = 'task-row' + (task.status === 'done' ? ' done' : '');
+  row.className = 'task-row' + (task.status === 'done' ? ' done' : '') + (isLocked ? ' locked' : '');
 
   const checkbox = document.createElement('div');
-  checkbox.className = 'checkbox' + (task.status === 'done' ? ' checked' : '');
+  checkbox.className = 'checkbox' + (task.status === 'done' ? ' checked' : '') + (isLocked ? ' locked' : '');
   checkbox.textContent = task.status === 'done' ? '✓' : '';
-  checkbox.addEventListener('click', () => toggleTask(task));
+  checkbox.addEventListener('click', () => {
+    if (isLocked) {
+      alert('Finish every task in the previous phase before checking this one off.');
+      return;
+    }
+    toggleTask(task);
+  });
 
   const body = document.createElement('div');
   body.className = 'task-body';
