@@ -4,6 +4,10 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Transaction Tracker — A Chance Realty</title>
+<link rel="manifest" href="/manifest.json">
+<link rel="icon" type="image/png" sizes="32x32" href="/icons/favicon-32.png">
+<link rel="apple-touch-icon" href="/icons/apple-touch-icon.png">
+<meta name="theme-color" content="#552448">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600;9..144,700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -105,6 +109,15 @@
     font-size:14px; font-weight:600; color:var(--text-muted); cursor:pointer; font-family:inherit;
   }
   .tab.active{ background:var(--accent); color:#fff; }
+  .tab-badge{
+    display:inline-block; background:var(--danger); color:#fff; font-size:11px; font-weight:700;
+    min-width:18px; height:18px; line-height:18px; border-radius:9px; padding:0 5px; margin-left:5px;
+  }
+  .tab.active .tab-badge{ background:#fff; color:var(--danger); }
+  .card-overdue-badge{
+    display:inline-block; background:var(--danger); color:#fff; font-size:11px; font-weight:700;
+    border-radius:20px; padding:3px 9px; margin-left:6px;
+  }
 
   .mt-group-title{
     font-family:'Fraunces',serif; font-size:15px; font-weight:600; margin:18px 0 8px 2px;
@@ -313,7 +326,7 @@
   <main>
     <div class="tabs" id="main-tabs">
       <button class="tab active" id="tab-txns">Transactions</button>
-      <button class="tab" id="tab-mine">My Tasks</button>
+      <button class="tab" id="tab-mine">My Tasks <span class="tab-badge hidden" id="mine-badge">0</span></button>
     </div>
 
     <!-- LIST VIEW -->
@@ -539,6 +552,7 @@ async function enterApp(){
   teamMembers = members || [];
 
   showList();
+  loadMyTasks(); // populate the "My Tasks" badge count right away, even before that tab is opened
 }
 
 function roleLabel(role){
@@ -622,6 +636,11 @@ async function loadMyTasks(){
 
   const sortByDue = (a,b) => (a.due_date || '9999').localeCompare(b.due_date || '9999');
   Object.values(groups).forEach(g => g.sort(sortByDue));
+
+  const badgeCount = groups.overdue.length + groups.today.length;
+  const badge = $('mine-badge');
+  badge.textContent = badgeCount;
+  badge.classList.toggle('hidden', badgeCount === 0);
 
   const container = $('my-tasks-container');
   container.innerHTML = '';
@@ -718,7 +737,7 @@ async function loadTransactions(){
   $('empty-state').classList.add('hidden');
 
   const ids = transactions.map(t => t.id);
-  const { data: allTasks } = await db.from('transaction_tasks').select('transaction_id,status').in('transaction_id', ids);
+  const { data: allTasks } = await db.from('transaction_tasks').select('transaction_id,status,due_date').in('transaction_id', ids);
 
   transactions.forEach(t => {
     const tasks = (allTasks || []).filter(x => x.transaction_id === t.id);
@@ -726,11 +745,15 @@ async function loadTransactions(){
     const total = tasks.length;
     const pct = total ? Math.round((done/total)*100) : 0;
 
+    const todayStr = new Date().toISOString().slice(0,10);
+    const overdueCount = tasks.filter(x => x.status === 'open' && x.due_date && x.due_date < todayStr).length;
+
     const card = document.createElement('div');
     card.className = 'txn-card';
     card.innerHTML = `
       <div class="status-badge status-${t.status}">${statusLabel(t.status)}</div>
       <span class="side-badge">${t.side === 'buyer' ? 'Buying' : t.side === 'dual' ? 'Dual' : 'Listing'}</span>
+      ${overdueCount > 0 ? `<span class="card-overdue-badge">${overdueCount} overdue</span>` : ''}
       <div class="addr">${escapeHtml(t.property_address)}</div>
       <div class="client">${t.client_name ? escapeHtml(t.client_name) : ''}</div>
       <div class="progress-row">
