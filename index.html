@@ -180,6 +180,23 @@
   .key-date-field input{ font-size:13px; padding:8px 10px; }
   .key-dates-hint{ font-size:12px; color:var(--text-muted); margin:6px 0 18px; }
 
+  .qs-card{
+    background:var(--surface); border:1px solid var(--border); border-radius:12px;
+    padding:16px; margin-bottom:16px;
+  }
+  .qs-title{ font-family:'Fraunces',serif; font-size:15px; font-weight:600; margin-bottom:12px; }
+  .qs-grid{ display:grid; grid-template-columns:1fr 1fr; gap:10px 12px; margin-bottom:14px; }
+  .qs-field label{ margin-bottom:3px; }
+  .qs-field input{ font-size:13px; padding:8px 10px; }
+  .qs-milestone-row{
+    display:flex; align-items:center; gap:10px; padding:8px 0; border-top:1px solid var(--border);
+  }
+  .qs-milestone-row:first-child{ border-top:none; }
+  .qs-milestone-row .checkbox{ width:20px; height:20px; margin-top:0; flex-shrink:0; }
+  .qs-milestone-label{ font-size:13.5px; flex:1; }
+  .qs-milestone-label.done{ text-decoration:line-through; color:var(--text-muted); }
+  .qs-milestone-sub{ font-size:11px; color:var(--text-muted); }
+
   .phase-lock-note{ font-size:11.5px; color:var(--text-muted); font-style:italic; }
   details.phase.locked summary{ opacity:.75; }
   .checkbox.locked{ cursor:not-allowed; opacity:.4; }
@@ -337,6 +354,19 @@
         </div>
         <p class="key-dates-hint">Setting these auto-fills due dates for every task tied to them — no need to set dates one by one.</p>
       </div>
+
+      <div class="qs-card">
+        <div class="qs-title">Quick Status</div>
+        <div class="qs-grid">
+          <div class="qs-field"><label>List Price</label><input type="text" id="qs-list-price" inputmode="decimal" placeholder="$" /></div>
+          <div class="qs-field"><label>Sale Price</label><input type="text" id="qs-sale-price" inputmode="decimal" placeholder="$" /></div>
+          <div class="qs-field"><label>Opposing Agent</label><input type="text" id="qs-opp-agent" /></div>
+          <div class="qs-field"><label>BAC</label><input type="text" id="qs-bac" placeholder="e.g. 3%" /></div>
+          <div class="qs-field" style="grid-column:1/-1;"><label>Agent Commission Note</label><input type="text" id="qs-agent-comm" /></div>
+        </div>
+        <div id="qs-milestones"></div>
+      </div>
+
       <div id="phase-container"></div>
     </div>
   </main>
@@ -747,23 +777,90 @@ async function openTransaction(id){
 async function saveKeyDate(column, value){
   await db.from('transactions').update({ [column]: value || null }).eq('id', currentTxnId);
   await db.rpc('recalc_transaction_due_dates', { p_transaction_id: currentTxnId });
+  $('qs-list-price').value = t.list_price ?? '';
+  $('qs-sale-price').value = t.sale_price ?? '';
+  $('qs-opp-agent').value = t.opposing_agent ?? '';
+  $('qs-bac').value = t.buyer_agent_commission ?? '';
+  $('qs-agent-comm').value = t.agent_commission_note ?? '';
+
+  $('qs-list-price').onchange = () => saveDealField('list_price', numOrNull($('qs-list-price').value));
+  $('qs-sale-price').onchange = () => saveDealField('sale_price', numOrNull($('qs-sale-price').value));
+  $('qs-opp-agent').onchange = () => saveDealField('opposing_agent', $('qs-opp-agent').value || null);
+  $('qs-bac').onchange = () => saveDealField('buyer_agent_commission', $('qs-bac').value || null);
+  $('qs-agent-comm').onchange = () => saveDealField('agent_commission_note', $('qs-agent-comm').value || null);
+
   await loadTasks();
+}
+
+function numOrNull(v){
+  const n = parseFloat(String(v).replace(/[^0-9.]/g, ''));
+  return isNaN(n) ? null : n;
+}
+
+async function saveDealField(column, value){
+  await db.from('transactions').update({ [column]: value }).eq('id', currentTxnId);
+}
+
+function renderQuickStatus(){
+  const locks = computePhaseLocks(currentTasks);
+  const milestones = currentTasks.filter(t => t.summary_label).sort((a,b) => a.phase_number - b.phase_number || a.sort_order - b.sort_order);
+
+  const container = $('qs-milestones');
+  container.innerHTML = '';
+
+  if (milestones.length === 0) return;
+
+  milestones.forEach(task => {
+    const isLocked = locks[task.phase_number];
+    const row = document.createElement('div');
+    row.className = 'qs-milestone-row';
+
+    const checkbox = document.createElement('div');
+    checkbox.className = 'checkbox' + (task.status === 'done' ? ' checked' : '') + (isLocked ? ' locked' : '');
+    checkbox.textContent = task.status === 'done' ? '✓' : '';
+    checkbox.addEventListener('click', () => {
+      if (isLocked) { alert('Finish the previous phase first.'); return; }
+      toggleTask(task);
+    });
+
+    const label = document.createElement('div');
+    label.className = 'qs-milestone-label' + (task.status === 'done' ? ' done' : '');
+    label.innerHTML = escapeHtml(task.summary_label) + (task.due_date ? `<div class="qs-milestone-sub">Due ${task.due_date}</div>` : '');
+
+    row.appendChild(checkbox);
+    row.appendChild(label);
+    container.appendChild(row);
+  });
 }
 
 async function loadTasks(){
   const { data: tasks } = await db.from('transaction_tasks').select('*').eq('transaction_id', currentTxnId).order('phase_number').order('sort_order');
   currentTasks = tasks || [];
+  renderQuickStatus();
   renderPhases();
+}
+
+function computePhaseLocks(tasks){
+  const phaseMap = new Map();
+  tasks.forEach(t => { if (!phaseMap.has(t.phase_number)) phaseMap.set(t.phase_number, true); });
+  const nums = [...phaseMap.keys()].sort((a,b) => a-b);
+  let prevComplete = true;
+  const locks = {};
+  nums.forEach(num => {
+    const pt = tasks.filter(t => t.phase_number === num);
+    const complete = pt.length === 0 || pt.every(t => t.status === 'done');
+    locks[num] = !prevComplete;
+    prevComplete = complete;
+  });
+  return locks;
 }
 
 function renderPhases(){
   const container = $('phase-container');
   container.innerHTML = '';
 
-  let previousPhaseComplete = true; // phase 1 is always unlocked
+  const locks = computePhaseLocks(currentTasks);
 
-  // Build the phase list from the tasks themselves, since buyer /
-  // seller / dual checklists have different phases
   const phaseMap = new Map();
   currentTasks.forEach(t => { if (!phaseMap.has(t.phase_number)) phaseMap.set(t.phase_number, t.phase_name); });
   const dynamicPhases = [...phaseMap.entries()].sort((a,b) => a[0]-b[0]);
@@ -771,8 +868,7 @@ function renderPhases(){
   dynamicPhases.forEach(([num, name]) => {
     const phaseTasks = currentTasks.filter(t => t.phase_number === num);
     const done = phaseTasks.filter(t => t.status === 'done').length;
-    const isLocked = !previousPhaseComplete;
-    const thisPhaseComplete = phaseTasks.length === 0 || done === phaseTasks.length;
+    const isLocked = locks[num];
 
     const details = document.createElement('details');
     details.className = 'phase' + (isLocked ? ' locked' : '');
@@ -804,8 +900,6 @@ function renderPhases(){
 
     details.appendChild(taskList);
     container.appendChild(details);
-
-    previousPhaseComplete = thisPhaseComplete;
   });
 }
 
