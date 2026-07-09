@@ -261,6 +261,16 @@
     background:none; border:none; color:var(--text-muted); cursor:pointer; font-size:16px; padding:2px 4px; margin-left:auto;
   }
   .notes-input{ margin-top:6px; font-size:13px; }
+  .note-toggle{
+    background:none; border:1px solid var(--border); border-radius:6px; color:var(--text-muted);
+    cursor:pointer; font-size:11px; padding:4px 8px; font-family:inherit;
+  }
+  .note-preview{
+    font-size:12.5px; color:var(--text-muted); background:var(--bg); border-radius:6px;
+    padding:6px 9px; margin-top:6px; white-space:pre-wrap; word-break:break-word;
+  }
+  .note-box{ margin-top:8px; }
+  .note-box textarea{ width:100%; font-family:inherit; border-radius:8px; }
 
   .add-task-row{ padding:12px 16px; }
   .add-task-row input{ margin-bottom:8px; }
@@ -1021,10 +1031,45 @@ function renderTaskRow(task, isLocked){
 
   meta.appendChild(assigneeSel);
   meta.appendChild(dueInput);
+
+  const noteToggle = document.createElement('button');
+  noteToggle.className = 'note-toggle';
+  noteToggle.type = 'button';
+  noteToggle.textContent = task.notes ? '📝 Note' : '+ Note';
+  meta.appendChild(noteToggle);
+
   meta.appendChild(delBtn);
 
   body.appendChild(textEl);
   body.appendChild(meta);
+
+  if (task.notes) {
+    const preview = document.createElement('div');
+    preview.className = 'note-preview';
+    preview.textContent = task.notes;
+    body.appendChild(preview);
+  }
+
+  const noteBox = document.createElement('div');
+  noteBox.className = 'note-box hidden';
+  const noteInput = document.createElement('textarea');
+  noteInput.className = 'notes-input';
+  noteInput.rows = 2;
+  noteInput.placeholder = 'Add a note for this task...';
+  noteInput.value = task.notes || '';
+  noteInput.addEventListener('blur', async () => {
+    const val = noteInput.value.trim();
+    await db.from('transaction_tasks').update({ notes: val || null }).eq('id', task.id);
+    task.notes = val || null;
+    noteToggle.textContent = task.notes ? '📝 Note' : '+ Note';
+  });
+  noteBox.appendChild(noteInput);
+  body.appendChild(noteBox);
+
+  noteToggle.addEventListener('click', () => {
+    noteBox.classList.toggle('hidden');
+    if (!noteBox.classList.contains('hidden')) noteInput.focus();
+  });
 
   row.appendChild(checkbox);
   row.appendChild(body);
