@@ -96,6 +96,32 @@
   .err{ color:var(--danger); font-size:13px; margin-top:10px; }
 
   /* ---------- Transaction list ---------- */
+  .tabs{
+    display:flex; gap:6px; background:var(--surface); border:1px solid var(--border);
+    border-radius:10px; padding:4px; margin-bottom:16px;
+  }
+  .tab{
+    flex:1; padding:9px 0; border:none; border-radius:7px; background:none;
+    font-size:14px; font-weight:600; color:var(--text-muted); cursor:pointer; font-family:inherit;
+  }
+  .tab.active{ background:var(--accent); color:#fff; }
+
+  .mt-group-title{
+    font-family:'Fraunces',serif; font-size:15px; font-weight:600; margin:18px 0 8px 2px;
+  }
+  .mt-group-title.overdue{ color:var(--danger); }
+  .mt-group-title.today{ color:var(--warning); }
+  .mt-row{
+    background:var(--surface); border:1px solid var(--border); border-radius:10px;
+    padding:12px 14px; margin-bottom:8px; display:flex; gap:10px; align-items:flex-start;
+  }
+  .mt-body{ flex:1; min-width:0; cursor:pointer; }
+  .mt-text{ font-size:14.5px; margin-bottom:3px; }
+  .mt-sub{ font-size:12px; color:var(--text-muted); }
+  .mt-due{ font-size:12px; font-weight:700; white-space:nowrap; margin-top:2px; }
+  .mt-due.overdue{ color:var(--danger); }
+  .mt-due.today{ color:var(--warning); }
+
   .list-header{
     display:flex; align-items:center; justify-content:space-between; margin-bottom:16px;
   }
@@ -267,6 +293,11 @@
   </header>
 
   <main>
+    <div class="tabs" id="main-tabs">
+      <button class="tab active" id="tab-txns">Transactions</button>
+      <button class="tab" id="tab-mine">My Tasks</button>
+    </div>
+
     <!-- LIST VIEW -->
     <div id="list-view">
       <div class="list-header">
@@ -275,6 +306,12 @@
       <div id="txn-list"></div>
       <div id="empty-state" class="empty-state hidden">No transactions yet. Tap + to start one.</div>
       <button class="fab" id="new-txn-fab">+</button>
+    </div>
+
+    <!-- MY TASKS VIEW -->
+    <div id="my-tasks-view" class="hidden">
+      <div id="my-tasks-container"></div>
+      <div id="my-tasks-empty" class="empty-state hidden">Nothing on your plate — all caught up! 🎉</div>
     </div>
 
     <!-- DETAIL VIEW -->
@@ -442,11 +479,158 @@ function roleLabel(role){
   return role;
 }
 
+// ---------------- TABS ----------------
+$('tab-txns').addEventListener('click', () => { setTab('txns'); showList(); });
+$('tab-mine').addEventListener('click', () => { setTab('mine'); showMyTasks(); });
+
+function setTab(which){
+  $('tab-txns').classList.toggle('active', which === 'txns');
+  $('tab-mine').classList.toggle('active', which === 'mine');
+}
+
+// ---------------- MY TASKS VIEW ----------------
+async function showMyTasks(){
+  currentTxnId = null;
+  $('list-view').classList.add('hidden');
+  $('detail-view').classList.add('hidden');
+  $('main-tabs').classList.remove('hidden');
+  $('my-tasks-view').classList.remove('hidden');
+  await loadMyTasks();
+}
+
+async function loadMyTasks(){
+  // Active transactions only
+  const { data: activeTxns } = await db.from('transactions')
+    .select('id, property_address, status')
+    .not('status', 'in', '(closed,cancelled)');
+
+  const txnIds = (activeTxns || []).map(t => t.id);
+  const txnById = Object.fromEntries((activeTxns || []).map(t => [t.id, t]));
+
+  if (txnIds.length === 0) {
+    $('my-tasks-container').innerHTML = '';
+    $('my-tasks-empty').classList.remove('hidden');
+    return;
+  }
+
+  // All tasks for those transactions (needed to compute phase locks),
+  // then filter down to mine
+  const { data: allTasks } = await db.from('transaction_tasks')
+    .select('*')
+    .in('transaction_id', txnIds);
+
+  // Compute the lowest incomplete phase per transaction — tasks in
+  // phases beyond that are locked
+  const lockBoundary = {};
+  txnIds.forEach(id => {
+    const tTasks = (allTasks || []).filter(t => t.transaction_id === id);
+    const phases = [...new Set(tTasks.map(t => t.phase_number))].sort((a,b) => a-b);
+    let boundary = Infinity;
+    for (const p of phases) {
+      const pt = tTasks.filter(t => t.phase_number === p);
+      if (pt.some(t => t.status !== 'done')) { boundary = p; break; }
+    }
+    lockBoundary[id] = boundary;
+  });
+
+  const mine = (allTasks || []).filter(t =>
+    t.assignee_id === currentMember.id && t.status === 'open'
+  );
+
+  const today = new Date(); today.setHours(0,0,0,0);
+  const groups = { overdue: [], today: [], soon: [], later: [], nodate: [] };
+
+  mine.forEach(t => {
+    if (!t.due_date) { groups.nodate.push(t); return; }
+    const due = new Date(t.due_date + 'T00:00:00');
+    const diff = Math.round((due - today) / 86400000);
+    if (diff < 0) groups.overdue.push(t);
+    else if (diff === 0) groups.today.push(t);
+    else if (diff <= 2) groups.soon.push(t);
+    else groups.later.push(t);
+  });
+
+  const sortByDue = (a,b) => (a.due_date || '9999').localeCompare(b.due_date || '9999');
+  Object.values(groups).forEach(g => g.sort(sortByDue));
+
+  const container = $('my-tasks-container');
+  container.innerHTML = '';
+
+  const sections = [
+    ['overdue', 'Overdue', 'overdue'],
+    ['today', 'Due Today', 'today'],
+    ['soon', 'Next 2 Days', ''],
+    ['later', 'Upcoming', ''],
+    ['nodate', 'No Due Date', '']
+  ];
+
+  let total = 0;
+  sections.forEach(([key, label, cls]) => {
+    const items = groups[key];
+    if (items.length === 0) return;
+    total += items.length;
+
+    const title = document.createElement('div');
+    title.className = 'mt-group-title ' + cls;
+    title.textContent = label + ' (' + items.length + ')';
+    container.appendChild(title);
+
+    items.forEach(task => {
+      const txn = txnById[task.transaction_id];
+      const isLocked = task.phase_number > lockBoundary[task.transaction_id];
+
+      const row = document.createElement('div');
+      row.className = 'mt-row';
+
+      const checkbox = document.createElement('div');
+      checkbox.className = 'checkbox' + (isLocked ? ' locked' : '');
+      checkbox.addEventListener('click', async (e) => {
+        e.stopPropagation();
+        if (isLocked) {
+          alert('Finish the earlier phase on this transaction first.');
+          return;
+        }
+        await db.from('transaction_tasks').update({
+          status:'done', completed_by: currentMember.id, completed_at: new Date().toISOString()
+        }).eq('id', task.id);
+        await loadMyTasks();
+      });
+
+      const body = document.createElement('div');
+      body.className = 'mt-body';
+      body.innerHTML = `
+        <div class="mt-text">${escapeHtml(task.task_text)}</div>
+        <div class="mt-sub">${escapeHtml(txn ? txn.property_address : '')} · ${escapeHtml(task.phase_name)}</div>
+      `;
+      body.addEventListener('click', () => openTransaction(task.transaction_id));
+
+      const due = document.createElement('div');
+      due.className = 'mt-due ' + (key === 'overdue' ? 'overdue' : key === 'today' ? 'today' : '');
+      due.textContent = task.due_date ? formatShortDate(task.due_date) : '';
+
+      row.appendChild(checkbox);
+      row.appendChild(body);
+      row.appendChild(due);
+      container.appendChild(row);
+    });
+  });
+
+  $('my-tasks-empty').classList.toggle('hidden', total > 0);
+}
+
+function formatShortDate(dateStr){
+  const d = new Date(dateStr + 'T00:00:00');
+  return d.toLocaleDateString('en-US', { month:'short', day:'numeric' });
+}
+
 // ---------------- LIST VIEW ----------------
 async function showList(){
   currentTxnId = null;
   $('detail-view').classList.add('hidden');
+  $('my-tasks-view').classList.add('hidden');
+  $('main-tabs').classList.remove('hidden');
   $('list-view').classList.remove('hidden');
+  setTab('txns');
   await loadTransactions();
 }
 
@@ -532,6 +716,8 @@ $('back-btn').addEventListener('click', showList);
 async function openTransaction(id){
   currentTxnId = id;
   $('list-view').classList.add('hidden');
+  $('my-tasks-view').classList.add('hidden');
+  $('main-tabs').classList.add('hidden');
   $('detail-view').classList.remove('hidden');
 
   const { data: t } = await db.from('transactions').select('*').eq('id', id).single();
