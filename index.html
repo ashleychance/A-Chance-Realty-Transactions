@@ -112,6 +112,11 @@
     display:inline-block; font-size:11px; font-weight:700; text-transform:uppercase;
     letter-spacing:.03em; padding:3px 9px; border-radius:20px; margin-bottom:10px;
   }
+  .side-badge{
+    display:inline-block; font-size:11px; font-weight:700; text-transform:uppercase;
+    letter-spacing:.03em; padding:3px 9px; border-radius:20px; margin-left:6px;
+    background:var(--accent); color:#fff;
+  }
   .status-pre_listing{ background:var(--warning-bg); color:var(--warning); }
   .status-active{ background:var(--success-bg); color:var(--success); }
   .status-under_contract{ background:#e6edf5; color:var(--navy); }
@@ -305,6 +310,14 @@
   <div class="modal">
     <h2>New Transaction</h2>
     <div class="field">
+      <label>Which side are you on?</label>
+      <select id="new-side">
+        <option value="seller">Selling side (listing)</option>
+        <option value="buyer">Buying side</option>
+        <option value="dual">Dual agent (both sides)</option>
+      </select>
+    </div>
+    <div class="field">
       <label>Property Address</label>
       <input type="text" id="new-address" placeholder="123 Main St, Benton, LA" />
     </div>
@@ -463,6 +476,7 @@ async function loadTransactions(){
     card.className = 'txn-card';
     card.innerHTML = `
       <div class="status-badge status-${t.status}">${statusLabel(t.status)}</div>
+      <span class="side-badge">${t.side === 'buyer' ? 'Buying' : t.side === 'dual' ? 'Dual' : 'Listing'}</span>
       <div class="addr">${escapeHtml(t.property_address)}</div>
       <div class="client">${t.client_name ? escapeHtml(t.client_name) : ''}</div>
       <div class="progress-row">
@@ -494,9 +508,10 @@ $('new-txn-save').addEventListener('click', async () => {
   const client = $('new-client').value.trim();
   if (!address) { $('new-txn-err').textContent = 'Address is required.'; return; }
 
+  const side = $('new-side').value;
   $('new-txn-save').disabled = true;
   const { data: newTxn, error } = await db.from('transactions')
-    .insert({ property_address: address, client_name: client || null, created_by: currentMember.id })
+    .insert({ property_address: address, client_name: client || null, side: side, created_by: currentMember.id })
     .select().single();
 
   if (error) {
@@ -505,7 +520,7 @@ $('new-txn-save').addEventListener('click', async () => {
     return;
   }
 
-  await db.rpc('create_transaction_tasks', { p_transaction_id: newTxn.id });
+  await db.rpc('create_transaction_tasks', { p_transaction_id: newTxn.id, p_side: side });
   $('new-txn-modal').classList.add('hidden');
   $('new-txn-save').disabled = false;
   await openTransaction(newTxn.id);
@@ -528,6 +543,9 @@ async function openTransaction(id){
   sel.onchange = async () => {
     await db.from('transactions').update({ status: sel.value }).eq('id', id);
   };
+
+  // Buyer-side deals have no listing date
+  $('key-listing-date').parentElement.style.display = (t.side === 'buyer') ? 'none' : '';
 
   $('key-listing-date').value = t.listing_date || '';
   $('key-contract-date').value = t.contract_date || '';
@@ -558,7 +576,13 @@ function renderPhases(){
 
   let previousPhaseComplete = true; // phase 1 is always unlocked
 
-  PHASES.forEach(([num, name]) => {
+  // Build the phase list from the tasks themselves, since buyer /
+  // seller / dual checklists have different phases
+  const phaseMap = new Map();
+  currentTasks.forEach(t => { if (!phaseMap.has(t.phase_number)) phaseMap.set(t.phase_number, t.phase_name); });
+  const dynamicPhases = [...phaseMap.entries()].sort((a,b) => a[0]-b[0]);
+
+  dynamicPhases.forEach(([num, name]) => {
     const phaseTasks = currentTasks.filter(t => t.phase_number === num);
     const done = phaseTasks.filter(t => t.status === 'done').length;
     const isLocked = !previousPhaseComplete;
