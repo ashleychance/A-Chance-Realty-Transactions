@@ -305,6 +305,7 @@
     </div>
     <div class="user">
       <div class="who" id="who-label"></div>
+      <button class="linklike" id="change-pw-btn">Change password</button>
       <button class="linklike" id="signout-btn">Sign out</button>
     </div>
   </header>
@@ -424,6 +425,22 @@
   </div>
 </div>
 
+<!-- CHANGE PASSWORD MODAL -->
+<div id="change-pw-modal" class="modal-backdrop hidden">
+  <div class="modal">
+    <h2>Change Password</h2>
+    <div class="field">
+      <label>New Password</label>
+      <input type="password" id="new-password" placeholder="At least 6 characters" />
+    </div>
+    <div class="err" id="change-pw-err"></div>
+    <div class="modal-actions">
+      <button class="secondary" id="change-pw-cancel">Cancel</button>
+      <button class="primary" id="change-pw-save">Save</button>
+    </div>
+  </div>
+</div>
+
 <script>
 const SUPABASE_URL = "https://nmttottwzbxumsmqligf.supabase.co";
 const SUPABASE_ANON_KEY = "sb_publishable_e-ch_oh_LNB0kHR5X09rvQ_HQdueOsL";
@@ -479,6 +496,29 @@ $('login-btn').addEventListener('click', async () => {
 $('signout-btn').addEventListener('click', async () => {
   await sbRoot.auth.signOut();
   location.reload();
+});
+
+$('change-pw-btn').addEventListener('click', () => {
+  $('new-password').value = '';
+  $('change-pw-err').textContent = '';
+  $('change-pw-modal').classList.remove('hidden');
+});
+$('change-pw-cancel').addEventListener('click', () => $('change-pw-modal').classList.add('hidden'));
+$('change-pw-save').addEventListener('click', async () => {
+  const pw = $('new-password').value;
+  if (!pw || pw.length < 6) {
+    $('change-pw-err').textContent = 'Password must be at least 6 characters.';
+    return;
+  }
+  $('change-pw-save').disabled = true;
+  const { error } = await sbRoot.auth.updateUser({ password: pw });
+  $('change-pw-save').disabled = false;
+  if (error) {
+    $('change-pw-err').textContent = error.message;
+    return;
+  }
+  $('change-pw-modal').classList.add('hidden');
+  alert('Password updated.');
 });
 
 async function enterApp(){
