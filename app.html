@@ -1,0 +1,678 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Transaction Tracker — A Chance Realty</title>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600;9..144,700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg:#f5f4f0;
+    --surface:#ffffff;
+    --text:#2b2620;
+    --text-muted:#7a7368;
+    --border:#ddd8ce;
+    --accent:#a8763e;
+    --accent-dark:#8a5f2f;
+    --navy:#2c3e50;
+    --success:#4a7c4e;
+    --success-bg:#eaf2ea;
+    --danger:#b1442f;
+    --danger-bg:#fbeae7;
+    --warning:#c98a2c;
+    --warning-bg:#faf1e2;
+  }
+  *{ box-sizing:border-box; }
+  body{
+    margin:0;
+    background:var(--bg);
+    color:var(--text);
+    font-family:'Inter',-apple-system,BlinkMacSystemFont,sans-serif;
+    -webkit-font-smoothing:antialiased;
+  }
+  h1,h2,h3,.display{ font-family:'Fraunces',serif; }
+  .hidden{ display:none !important; }
+
+  /* ---------- Top bar ---------- */
+  header.topbar{
+    background:var(--surface);
+    border-bottom:1px solid var(--border);
+    padding:14px 18px;
+    display:flex;
+    align-items:center;
+    justify-content:space-between;
+    position:sticky;
+    top:0;
+    z-index:10;
+  }
+  header.topbar .brand{ display:flex; flex-direction:column; }
+  header.topbar .brand .name{ font-size:17px; font-weight:600; }
+  header.topbar .brand .sub{ font-size:12px; color:var(--text-muted); }
+  header.topbar .user{ display:flex; align-items:center; gap:10px; }
+  header.topbar .user .who{ font-size:13px; color:var(--text-muted); text-align:right; }
+  header.topbar button.linklike{
+    background:none; border:none; color:var(--accent-dark);
+    font-size:13px; font-weight:600; cursor:pointer; padding:4px;
+  }
+
+  main{ max-width:640px; margin:0 auto; padding:18px 16px 80px; }
+
+  /* ---------- Auth ---------- */
+  .auth-wrap{
+    display:flex; align-items:center; justify-content:center;
+    min-height:100vh; padding:20px;
+  }
+  .auth-card{
+    background:var(--surface); border-radius:14px; padding:32px 28px;
+    max-width:360px; width:100%; box-shadow:0 4px 20px rgba(0,0,0,.08);
+  }
+  .auth-card h1{ font-size:22px; margin:0 0 2px; }
+  .auth-card p.sub{ color:var(--text-muted); font-size:14px; margin:0 0 22px; }
+
+  input, select, textarea{
+    width:100%;
+    padding:10px 12px;
+    border:1px solid var(--border);
+    border-radius:8px;
+    font-size:15px;
+    font-family:inherit;
+    background:#fff;
+    color:var(--text);
+  }
+  label{ display:block; font-size:12px; color:var(--text-muted); margin-bottom:4px; font-weight:600; text-transform:uppercase; letter-spacing:.03em; }
+  .field{ margin-bottom:14px; }
+
+  button.primary{
+    width:100%; padding:11px 14px; border:none; border-radius:8px;
+    background:var(--accent); color:#fff; font-size:15px; font-weight:600; cursor:pointer;
+  }
+  button.primary:disabled{ opacity:.6; cursor:default; }
+  button.secondary{
+    padding:9px 14px; border:1px solid var(--border); border-radius:8px;
+    background:#fff; color:var(--text); font-size:14px; font-weight:600; cursor:pointer;
+  }
+  .err{ color:var(--danger); font-size:13px; margin-top:10px; }
+
+  /* ---------- Transaction list ---------- */
+  .list-header{
+    display:flex; align-items:center; justify-content:space-between; margin-bottom:16px;
+  }
+  .list-header h1{ font-size:22px; margin:0; }
+
+  .txn-card{
+    background:var(--surface); border:1px solid var(--border); border-radius:12px;
+    padding:16px; margin-bottom:12px; cursor:pointer;
+  }
+  .txn-card:active{ background:#faf9f6; }
+  .txn-card .addr{ font-weight:600; font-size:15px; margin-bottom:4px; }
+  .txn-card .client{ font-size:13px; color:var(--text-muted); margin-bottom:10px; }
+  .status-badge{
+    display:inline-block; font-size:11px; font-weight:700; text-transform:uppercase;
+    letter-spacing:.03em; padding:3px 9px; border-radius:20px; margin-bottom:10px;
+  }
+  .status-pre_listing{ background:var(--warning-bg); color:var(--warning); }
+  .status-active{ background:var(--success-bg); color:var(--success); }
+  .status-under_contract{ background:#e6edf5; color:var(--navy); }
+  .status-closed{ background:#eee; color:var(--text-muted); }
+  .status-cancelled{ background:var(--danger-bg); color:var(--danger); }
+
+  .progress-row{ display:flex; align-items:center; gap:8px; }
+  .progress-track{
+    flex:1; height:6px; background:var(--border); border-radius:4px; overflow:hidden;
+  }
+  .progress-fill{ height:100%; background:var(--accent); }
+  .progress-label{ font-size:12px; color:var(--text-muted); white-space:nowrap; }
+
+  .empty-state{
+    text-align:center; padding:50px 20px; color:var(--text-muted);
+  }
+
+  /* ---------- Transaction detail ---------- */
+  .back-btn{
+    background:none; border:none; color:var(--accent-dark); font-size:14px;
+    font-weight:600; cursor:pointer; padding:0; margin-bottom:14px; display:flex; align-items:center; gap:4px;
+  }
+  .detail-head{ margin-bottom:6px; }
+  .detail-head h1{ font-size:20px; margin:0 0 2px; }
+  .detail-head .client{ font-size:13px; color:var(--text-muted); margin-bottom:10px; }
+
+  .status-select{ width:auto; display:inline-block; font-size:12px; font-weight:700; padding:5px 10px; border-radius:20px; border:1px solid var(--border); margin-bottom:18px; }
+
+  details.phase{
+    background:var(--surface); border:1px solid var(--border); border-radius:12px;
+    margin-bottom:10px; overflow:hidden;
+  }
+  details.phase summary{
+    list-style:none; cursor:pointer; padding:13px 16px; display:flex; align-items:center; justify-content:space-between;
+  }
+  details.phase summary::-webkit-details-marker{ display:none; }
+  .phase-left{ display:flex; align-items:center; gap:10px; }
+  .keytag{
+    position:relative; background:var(--accent); color:#fff; font-family:'Fraunces',serif;
+    font-weight:600; font-size:13px; padding:4px 10px 4px 20px; border-radius:4px; white-space:nowrap;
+  }
+  .keytag::before{
+    content:''; position:absolute; left:7px; top:50%; transform:translateY(-50%);
+    width:6px; height:6px; border-radius:50%; background:var(--bg);
+  }
+  .phase-name{ font-size:14px; font-weight:600; }
+  .phase-count{ font-size:12px; color:var(--text-muted); }
+  .chev{ transition:transform .15s; color:var(--text-muted); }
+  details[open] .chev{ transform:rotate(180deg); }
+
+  .task-list{ border-top:1px solid var(--border); }
+  .task-row{
+    padding:12px 16px; border-bottom:1px solid var(--border); display:flex; gap:10px; align-items:flex-start;
+  }
+  .task-row:last-child{ border-bottom:none; }
+  .task-row.done .task-text{ text-decoration:line-through; color:var(--text-muted); }
+  .checkbox{
+    width:22px; height:22px; border-radius:6px; border:2px solid var(--border);
+    flex-shrink:0; cursor:pointer; display:flex; align-items:center; justify-content:center;
+    background:#fff; margin-top:1px;
+  }
+  .checkbox.checked{ background:var(--success); border-color:var(--success); color:#fff; font-size:14px; }
+  .task-body{ flex:1; min-width:0; }
+  .task-text{ font-size:14.5px; margin-bottom:8px; }
+  .task-meta{ display:flex; flex-wrap:wrap; gap:6px; align-items:center; }
+  .task-meta select, .task-meta input[type=date]{
+    font-size:12px; padding:4px 8px; border-radius:6px; width:auto;
+  }
+  .due-overdue{ color:var(--danger); font-weight:600; }
+  .due-soon{ color:var(--warning); font-weight:600; }
+  .del-btn{
+    background:none; border:none; color:var(--text-muted); cursor:pointer; font-size:16px; padding:2px 4px; margin-left:auto;
+  }
+  .notes-input{ margin-top:6px; font-size:13px; }
+
+  .add-task-row{ padding:12px 16px; }
+  .add-task-row input{ margin-bottom:8px; }
+
+  .fab{
+    position:fixed; bottom:22px; right:20px; width:54px; height:54px; border-radius:50%;
+    background:var(--accent); color:#fff; font-size:26px; border:none; cursor:pointer;
+    box-shadow:0 4px 14px rgba(0,0,0,.2); display:flex; align-items:center; justify-content:center;
+  }
+
+  /* ---------- Modal ---------- */
+  .modal-backdrop{
+    position:fixed; inset:0; background:rgba(0,0,0,.4); display:flex; align-items:flex-end;
+    justify-content:center; z-index:100;
+  }
+  .modal{
+    background:var(--surface); border-radius:16px 16px 0 0; padding:22px 20px 26px;
+    width:100%; max-width:480px;
+  }
+  @media (min-width:520px){
+    .modal-backdrop{ align-items:center; }
+    .modal{ border-radius:16px; }
+  }
+  .modal h2{ font-size:18px; margin:0 0 16px; }
+  .modal-actions{ display:flex; gap:10px; margin-top:6px; }
+  .modal-actions button{ flex:1; }
+</style>
+</head>
+<body>
+
+<!-- AUTH VIEW -->
+<div id="auth-view" class="auth-wrap">
+  <div class="auth-card">
+    <h1>Transaction Tracker</h1>
+    <p class="sub">A Chance Realty</p>
+    <div class="field">
+      <label>Email</label>
+      <input type="email" id="login-email" autocomplete="username" />
+    </div>
+    <div class="field">
+      <label>Password</label>
+      <input type="password" id="login-password" autocomplete="current-password" />
+    </div>
+    <button class="primary" id="login-btn">Sign In</button>
+    <div class="err" id="login-err"></div>
+  </div>
+</div>
+
+<!-- APP VIEW -->
+<div id="app-view" class="hidden">
+  <header class="topbar">
+    <div class="brand">
+      <div class="name">Transaction Tracker</div>
+      <div class="sub">A Chance Realty</div>
+    </div>
+    <div class="user">
+      <div class="who" id="who-label"></div>
+      <button class="linklike" id="signout-btn">Sign out</button>
+    </div>
+  </header>
+
+  <main>
+    <!-- LIST VIEW -->
+    <div id="list-view">
+      <div class="list-header">
+        <h1>Transactions</h1>
+      </div>
+      <div id="txn-list"></div>
+      <div id="empty-state" class="empty-state hidden">No transactions yet. Tap + to start one.</div>
+      <button class="fab" id="new-txn-fab">+</button>
+    </div>
+
+    <!-- DETAIL VIEW -->
+    <div id="detail-view" class="hidden">
+      <button class="back-btn" id="back-btn">&larr; All transactions</button>
+      <div class="detail-head">
+        <h1 id="detail-address"></h1>
+        <div class="client" id="detail-client"></div>
+        <select class="status-select" id="detail-status"></select>
+      </div>
+      <div id="phase-container"></div>
+    </div>
+  </main>
+</div>
+
+<!-- NEW TRANSACTION MODAL -->
+<div id="new-txn-modal" class="modal-backdrop hidden">
+  <div class="modal">
+    <h2>New Transaction</h2>
+    <div class="field">
+      <label>Property Address</label>
+      <input type="text" id="new-address" placeholder="123 Main St, Benton, LA" />
+    </div>
+    <div class="field">
+      <label>Client Name</label>
+      <input type="text" id="new-client" placeholder="Seller or buyer name" />
+    </div>
+    <div class="err" id="new-txn-err"></div>
+    <div class="modal-actions">
+      <button class="secondary" id="new-txn-cancel">Cancel</button>
+      <button class="primary" id="new-txn-save">Create</button>
+    </div>
+  </div>
+</div>
+
+<!-- ADD TASK MODAL -->
+<div id="add-task-modal" class="modal-backdrop hidden">
+  <div class="modal">
+    <h2>Add Task</h2>
+    <div class="field">
+      <label>Task</label>
+      <input type="text" id="add-task-text" placeholder="e.g. Confirm HOA transfer fee" />
+    </div>
+    <div class="field">
+      <label>Assign to</label>
+      <select id="add-task-assignee"></select>
+    </div>
+    <div class="field">
+      <label>Due date (optional)</label>
+      <input type="date" id="add-task-due" />
+    </div>
+    <div class="err" id="add-task-err"></div>
+    <div class="modal-actions">
+      <button class="secondary" id="add-task-cancel">Cancel</button>
+      <button class="primary" id="add-task-save">Add</button>
+    </div>
+  </div>
+</div>
+
+<script>
+const SUPABASE_URL = "https://nmttottwzbxumsmqligf.supabase.co";
+const SUPABASE_ANON_KEY = "sb_publishable_e-ch_oh_LNB0kHR5X09rvQ_HQdueOsL";
+const sbRoot = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+const db = sbRoot.schema('txn');
+
+let currentMember = null;
+let teamMembers = [];
+let currentTxnId = null;
+let currentTasks = [];
+
+const PHASES = [
+  [1,'Pre-Listing Setup'],[2,'After Listing Agreement Signed'],[3,'Marketing Prep'],
+  [4,'Go Live Day'],[5,'Ongoing Listing Management'],[6,'Under Contract'],
+  [7,'Closing Prep'],[8,'Post-Closing']
+];
+
+const STATUSES = [
+  ['pre_listing','Pre-Listing'],['active','Active'],['under_contract','Under Contract'],
+  ['closed','Closed'],['cancelled','Cancelled']
+];
+
+function $(id){ return document.getElementById(id); }
+
+// ---------------- AUTH ----------------
+async function init(){
+  const { data: { session } } = await sbRoot.auth.getSession();
+  if (session) await enterApp();
+  else showAuth();
+}
+
+function showAuth(){
+  $('auth-view').classList.remove('hidden');
+  $('app-view').classList.add('hidden');
+}
+
+$('login-btn').addEventListener('click', async () => {
+  const email = $('login-email').value.trim();
+  const password = $('login-password').value;
+  $('login-err').textContent = '';
+  $('login-btn').disabled = true;
+  $('login-btn').textContent = 'Signing in...';
+  const { error } = await sbRoot.auth.signInWithPassword({ email, password });
+  if (error) {
+    $('login-err').textContent = error.message;
+    $('login-btn').disabled = false;
+    $('login-btn').textContent = 'Sign In';
+    return;
+  }
+  await enterApp();
+});
+
+$('signout-btn').addEventListener('click', async () => {
+  await sbRoot.auth.signOut();
+  location.reload();
+});
+
+async function enterApp(){
+  const { data: { user } } = await sbRoot.auth.getUser();
+  const { data: member, error } = await db.from('team_members').select('*').eq('user_id', user.id).maybeSingle();
+  if (error || !member) {
+    $('auth-view').classList.remove('hidden');
+    $('app-view').classList.add('hidden');
+    $('login-err').textContent = "Your login isn't linked to a team profile yet. Ask Tim to add you.";
+    return;
+  }
+  currentMember = member;
+  $('who-label').textContent = member.name + ' · ' + roleLabel(member.role);
+  $('auth-view').classList.add('hidden');
+  $('app-view').classList.remove('hidden');
+
+  const { data: members } = await db.from('team_members').select('*').order('name');
+  teamMembers = members || [];
+
+  showList();
+}
+
+function roleLabel(role){
+  if (role === 'agent') return 'Agent';
+  if (role === 'assistant') return 'Assistant';
+  if (role === 'coordinator') return 'Coordinator';
+  if (role === 'assistant_coordinator') return 'Assistant / Coordinator';
+  return role;
+}
+
+// ---------------- LIST VIEW ----------------
+async function showList(){
+  currentTxnId = null;
+  $('detail-view').classList.add('hidden');
+  $('list-view').classList.remove('hidden');
+  await loadTransactions();
+}
+
+async function loadTransactions(){
+  const { data: transactions, error } = await db.from('transactions').select('*').order('created_at', { ascending:false });
+  if (error) { console.error(error); return; }
+
+  const container = $('txn-list');
+  container.innerHTML = '';
+
+  if (!transactions || transactions.length === 0) {
+    $('empty-state').classList.remove('hidden');
+    return;
+  }
+  $('empty-state').classList.add('hidden');
+
+  const ids = transactions.map(t => t.id);
+  const { data: allTasks } = await db.from('transaction_tasks').select('transaction_id,status').in('transaction_id', ids);
+
+  transactions.forEach(t => {
+    const tasks = (allTasks || []).filter(x => x.transaction_id === t.id);
+    const done = tasks.filter(x => x.status === 'done').length;
+    const total = tasks.length;
+    const pct = total ? Math.round((done/total)*100) : 0;
+
+    const card = document.createElement('div');
+    card.className = 'txn-card';
+    card.innerHTML = `
+      <div class="status-badge status-${t.status}">${statusLabel(t.status)}</div>
+      <div class="addr">${escapeHtml(t.property_address)}</div>
+      <div class="client">${t.client_name ? escapeHtml(t.client_name) : ''}</div>
+      <div class="progress-row">
+        <div class="progress-track"><div class="progress-fill" style="width:${pct}%"></div></div>
+        <div class="progress-label">${done}/${total}</div>
+      </div>
+    `;
+    card.addEventListener('click', () => openTransaction(t.id));
+    container.appendChild(card);
+  });
+}
+
+function statusLabel(s){
+  const found = STATUSES.find(x => x[0] === s);
+  return found ? found[1] : s;
+}
+
+// ---------------- NEW TRANSACTION MODAL ----------------
+$('new-txn-fab').addEventListener('click', () => {
+  $('new-address').value = '';
+  $('new-client').value = '';
+  $('new-txn-err').textContent = '';
+  $('new-txn-modal').classList.remove('hidden');
+});
+$('new-txn-cancel').addEventListener('click', () => $('new-txn-modal').classList.add('hidden'));
+
+$('new-txn-save').addEventListener('click', async () => {
+  const address = $('new-address').value.trim();
+  const client = $('new-client').value.trim();
+  if (!address) { $('new-txn-err').textContent = 'Address is required.'; return; }
+
+  $('new-txn-save').disabled = true;
+  const { data: newTxn, error } = await db.from('transactions')
+    .insert({ property_address: address, client_name: client || null, created_by: currentMember.id })
+    .select().single();
+
+  if (error) {
+    $('new-txn-err').textContent = error.message;
+    $('new-txn-save').disabled = false;
+    return;
+  }
+
+  await db.rpc('create_transaction_tasks', { p_transaction_id: newTxn.id });
+  $('new-txn-modal').classList.add('hidden');
+  $('new-txn-save').disabled = false;
+  await openTransaction(newTxn.id);
+});
+
+// ---------------- DETAIL VIEW ----------------
+$('back-btn').addEventListener('click', showList);
+
+async function openTransaction(id){
+  currentTxnId = id;
+  $('list-view').classList.add('hidden');
+  $('detail-view').classList.remove('hidden');
+
+  const { data: t } = await db.from('transactions').select('*').eq('id', id).single();
+  $('detail-address').textContent = t.property_address;
+  $('detail-client').textContent = t.client_name || '';
+
+  const sel = $('detail-status');
+  sel.innerHTML = STATUSES.map(s => `<option value="${s[0]}" ${s[0]===t.status?'selected':''}>${s[1]}</option>`).join('');
+  sel.onchange = async () => {
+    await db.from('transactions').update({ status: sel.value }).eq('id', id);
+  };
+
+  await loadTasks();
+}
+
+async function loadTasks(){
+  const { data: tasks } = await db.from('transaction_tasks').select('*').eq('transaction_id', currentTxnId).order('phase_number').order('sort_order');
+  currentTasks = tasks || [];
+  renderPhases();
+}
+
+function renderPhases(){
+  const container = $('phase-container');
+  container.innerHTML = '';
+
+  PHASES.forEach(([num, name]) => {
+    const phaseTasks = currentTasks.filter(t => t.phase_number === num);
+    const done = phaseTasks.filter(t => t.status === 'done').length;
+
+    const details = document.createElement('details');
+    details.className = 'phase';
+    if (phaseTasks.some(t => t.status !== 'done')) details.open = false;
+
+    const summary = document.createElement('summary');
+    summary.innerHTML = `
+      <div class="phase-left">
+        <span class="keytag">${num}</span>
+        <span class="phase-name">${name}</span>
+      </div>
+      <div style="display:flex;align-items:center;gap:8px;">
+        <span class="phase-count">${done}/${phaseTasks.length}</span>
+        <span class="chev">&#9660;</span>
+      </div>
+    `;
+    details.appendChild(summary);
+
+    const taskList = document.createElement('div');
+    taskList.className = 'task-list';
+
+    phaseTasks.forEach(task => taskList.appendChild(renderTaskRow(task)));
+
+    const addRow = document.createElement('div');
+    addRow.className = 'add-task-row';
+    addRow.innerHTML = `<button class="secondary" style="width:100%">+ Add task to ${escapeHtml(name)}</button>`;
+    addRow.querySelector('button').addEventListener('click', () => openAddTaskModal(num, name));
+    taskList.appendChild(addRow);
+
+    details.appendChild(taskList);
+    container.appendChild(details);
+  });
+}
+
+function renderTaskRow(task){
+  const row = document.createElement('div');
+  row.className = 'task-row' + (task.status === 'done' ? ' done' : '');
+
+  const checkbox = document.createElement('div');
+  checkbox.className = 'checkbox' + (task.status === 'done' ? ' checked' : '');
+  checkbox.textContent = task.status === 'done' ? '✓' : '';
+  checkbox.addEventListener('click', () => toggleTask(task));
+
+  const body = document.createElement('div');
+  body.className = 'task-body';
+
+  const textEl = document.createElement('div');
+  textEl.className = 'task-text';
+  textEl.textContent = task.task_text;
+
+  const meta = document.createElement('div');
+  meta.className = 'task-meta';
+
+  const assigneeSel = document.createElement('select');
+  assigneeSel.innerHTML = '<option value="">Unassigned</option>' +
+    teamMembers.map(m => `<option value="${m.id}" ${m.id===task.assignee_id?'selected':''}>${escapeHtml(m.name)}</option>`).join('');
+  assigneeSel.addEventListener('change', async () => {
+    await db.from('transaction_tasks').update({ assignee_id: assigneeSel.value || null }).eq('id', task.id);
+    task.assignee_id = assigneeSel.value || null;
+  });
+
+  const dueInput = document.createElement('input');
+  dueInput.type = 'date';
+  dueInput.value = task.due_date || '';
+  applyDueStyle(dueInput, task);
+  dueInput.addEventListener('change', async () => {
+    await db.from('transaction_tasks').update({ due_date: dueInput.value || null }).eq('id', task.id);
+    task.due_date = dueInput.value || null;
+    applyDueStyle(dueInput, task);
+  });
+
+  const delBtn = document.createElement('button');
+  delBtn.className = 'del-btn';
+  delBtn.textContent = '✕';
+  delBtn.title = 'Delete task';
+  delBtn.addEventListener('click', async () => {
+    if (!confirm('Delete this task?')) return;
+    await db.from('transaction_tasks').delete().eq('id', task.id);
+    await loadTasks();
+  });
+
+  meta.appendChild(assigneeSel);
+  meta.appendChild(dueInput);
+  meta.appendChild(delBtn);
+
+  body.appendChild(textEl);
+  body.appendChild(meta);
+
+  row.appendChild(checkbox);
+  row.appendChild(body);
+  return row;
+}
+
+function applyDueStyle(input, task){
+  input.classList.remove('due-overdue','due-soon');
+  if (!task.due_date || task.status === 'done') return;
+  const today = new Date(); today.setHours(0,0,0,0);
+  const due = new Date(task.due_date + 'T00:00:00');
+  const diffDays = Math.round((due - today) / 86400000);
+  if (diffDays < 0) input.classList.add('due-overdue');
+  else if (diffDays <= 2) input.classList.add('due-soon');
+}
+
+async function toggleTask(task){
+  const isDone = task.status === 'done';
+  const update = isDone
+    ? { status:'open', completed_by:null, completed_at:null }
+    : { status:'done', completed_by: currentMember.id, completed_at: new Date().toISOString() };
+  await db.from('transaction_tasks').update(update).eq('id', task.id);
+  await loadTasks();
+}
+
+// ---------------- ADD TASK MODAL ----------------
+let addTaskPhase = null;
+function openAddTaskModal(phaseNum, phaseName){
+  addTaskPhase = { num: phaseNum, name: phaseName };
+  $('add-task-text').value = '';
+  $('add-task-due').value = '';
+  $('add-task-err').textContent = '';
+  $('add-task-assignee').innerHTML = '<option value="">Unassigned</option>' +
+    teamMembers.map(m => `<option value="${m.id}">${escapeHtml(m.name)}</option>`).join('');
+  $('add-task-modal').classList.remove('hidden');
+}
+$('add-task-cancel').addEventListener('click', () => $('add-task-modal').classList.add('hidden'));
+
+$('add-task-save').addEventListener('click', async () => {
+  const text = $('add-task-text').value.trim();
+  if (!text) { $('add-task-err').textContent = 'Task text is required.'; return; }
+
+  const phaseTasks = currentTasks.filter(t => t.phase_number === addTaskPhase.num);
+  const nextSort = phaseTasks.length ? Math.max(...phaseTasks.map(t => t.sort_order)) + 1 : 1;
+
+  $('add-task-save').disabled = true;
+  const { error } = await db.from('transaction_tasks').insert({
+    transaction_id: currentTxnId,
+    phase_number: addTaskPhase.num,
+    phase_name: addTaskPhase.name,
+    task_text: text,
+    sort_order: nextSort,
+    assignee_id: $('add-task-assignee').value || null,
+    due_date: $('add-task-due').value || null
+  });
+  $('add-task-save').disabled = false;
+
+  if (error) { $('add-task-err').textContent = error.message; return; }
+  $('add-task-modal').classList.add('hidden');
+  await loadTasks();
+});
+
+function escapeHtml(str){
+  if (!str) return '';
+  const div = document.createElement('div');
+  div.textContent = str;
+  return div.innerHTML;
+}
+
+init();
+</script>
+</body>
+</html>
