@@ -1,0 +1,153 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>A Chance Realty — Transaction Tracker</title>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<style>
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    background: #f5f4f0;
+    color: #2b2620;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 100vh;
+    padding: 20px;
+  }
+  .card {
+    background: #fff;
+    border-radius: 14px;
+    padding: 32px 28px;
+    max-width: 380px;
+    width: 100%;
+    box-shadow: 0 4px 20px rgba(0,0,0,0.08);
+    text-align: center;
+  }
+  h1 {
+    font-size: 20px;
+    margin: 0 0 4px;
+  }
+  p.subtitle {
+    color: #7a7368;
+    font-size: 14px;
+    margin: 0 0 24px;
+  }
+  input {
+    width: 100%;
+    padding: 12px 14px;
+    border: 1px solid #ddd8ce;
+    border-radius: 8px;
+    font-size: 15px;
+    margin-bottom: 12px;
+  }
+  button {
+    width: 100%;
+    padding: 12px 14px;
+    border: none;
+    border-radius: 8px;
+    background: #a8763e;
+    color: #fff;
+    font-size: 15px;
+    font-weight: 600;
+    cursor: pointer;
+  }
+  button:disabled { opacity: 0.6; cursor: default; }
+  .msg {
+    font-size: 14px;
+    margin-top: 16px;
+  }
+  .msg.error { color: #b1442f; }
+  .msg.success { color: #4a7c4e; }
+  .hidden { display: none; }
+</style>
+</head>
+<body>
+
+<div class="card">
+  <h1>Transaction Tracker</h1>
+  <p class="subtitle">A Chance Realty</p>
+
+  <div id="setup-view" class="hidden">
+    <p class="subtitle">Set your password to finish setting up your account.</p>
+    <input type="password" id="password" placeholder="New password (min 6 characters)" />
+    <button id="save-btn">Set Password &amp; Continue</button>
+    <div id="setup-msg" class="msg"></div>
+  </div>
+
+  <div id="default-view">
+    <p class="subtitle">This is the account setup link for your team's transaction checklist app. Nothing to do here unless you followed an invite link.</p>
+  </div>
+</div>
+
+<script>
+  const SUPABASE_URL = "https://nmttottwzbxumsmqligf.supabase.co";
+  const SUPABASE_ANON_KEY = "sb_publishable_e-ch_oh_LNB0kHR5X09rvQ_HQdueOsL";
+  const sb = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+  const setupView = document.getElementById('setup-view');
+  const defaultView = document.getElementById('default-view');
+  const msgEl = document.getElementById('setup-msg');
+
+  async function init() {
+    // Supabase puts invite/recovery tokens in the URL hash.
+    // supabase-js v2 automatically detects and stores the session
+    // from the hash on load if detectSessionInUrl is enabled (default true).
+    const hash = window.location.hash;
+
+    if (hash.includes('error=')) {
+      const params = new URLSearchParams(hash.substring(1));
+      msgEl.textContent = 'This link has expired or already been used. Ask for a fresh invite.';
+      msgEl.className = 'msg error';
+      setupView.classList.remove('hidden');
+      defaultView.classList.add('hidden');
+      document.getElementById('password').classList.add('hidden');
+      document.getElementById('save-btn').classList.add('hidden');
+      return;
+    }
+
+    // Give supabase-js a moment to parse the hash and set the session
+    const { data: { session } } = await sb.auth.getSession();
+
+    if (session) {
+      setupView.classList.remove('hidden');
+      defaultView.classList.add('hidden');
+    }
+  }
+
+  document.getElementById('save-btn').addEventListener('click', async () => {
+    const password = document.getElementById('password').value;
+    const btn = document.getElementById('save-btn');
+
+    if (!password || password.length < 6) {
+      msgEl.textContent = 'Password must be at least 6 characters.';
+      msgEl.className = 'msg error';
+      return;
+    }
+
+    btn.disabled = true;
+    btn.textContent = 'Saving...';
+
+    const { error } = await sb.auth.updateUser({ password });
+
+    if (error) {
+      msgEl.textContent = error.message;
+      msgEl.className = 'msg error';
+      btn.disabled = false;
+      btn.textContent = 'Set Password & Continue';
+    } else {
+      msgEl.textContent = "You're all set! The full app link is coming soon — talk to Tim.";
+      msgEl.className = 'msg success';
+      document.getElementById('password').classList.add('hidden');
+      btn.classList.add('hidden');
+    }
+  });
+
+  init();
+</script>
+
+</body>
+</html>
