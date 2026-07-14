@@ -119,10 +119,18 @@
     border-radius:20px; padding:3px 9px; margin-left:6px;
   }
 
+  #view-as-row{
+    display:flex; align-items:center; gap:8px; background:var(--surface); border:1px solid var(--border);
+    border-radius:10px; padding:10px 12px; margin-bottom:14px;
+  }
+  #view-as-row label{ font-size:12px; color:var(--text-muted); margin-bottom:0; white-space:nowrap; }
+  #view-as-row select{ flex:1; font-size:13px; padding:6px 8px; }
+
   .mt-group-title{
     font-family:'Fraunces',serif; font-size:15px; font-weight:600; margin:18px 0 8px 2px;
   }
   .mt-group-title.overdue{ color:var(--danger); }
+  .mt-group-title.flagged-title{ color:var(--warning); }
   .mt-group-title.today{ color:var(--warning); }
   .mt-row{
     background:var(--surface); border:1px solid var(--border); border-radius:10px;
@@ -253,6 +261,13 @@
   }
   .task-row:last-child{ border-bottom:none; }
   .task-row.done .task-text{ text-decoration:line-through; color:var(--text-muted); }
+  .task-row.flagged{ background:var(--warning-bg); }
+  .flag-btn{
+    background:none; border:none; font-size:17px; cursor:pointer; padding:2px 4px;
+    opacity:.4; flex-shrink:0; margin-top:1px;
+  }
+  .flag-btn.active{ opacity:1; }
+
   .checkbox{
     width:22px; height:22px; border-radius:6px; border:2px solid var(--border);
     flex-shrink:0; cursor:pointer; display:flex; align-items:center; justify-content:center;
@@ -308,6 +323,9 @@
   }
   .dir-suggestion:hover{ background:var(--bg); }
   .dir-suggestion .dsug-role{ font-size:10.5px; color:var(--accent-dark); font-weight:700; text-transform:uppercase; }
+
+  .contacts-summary{ cursor:pointer; font-size:13px; color:var(--accent-dark); font-weight:600; list-style:none; }
+  .contacts-summary::-webkit-details-marker{ display:none; }
 
   .contact-row{
     display:flex; align-items:center; gap:10px; padding:10px 0; border-top:1px solid var(--border); cursor:pointer;
@@ -427,6 +445,10 @@
 
     <!-- MY TASKS VIEW -->
     <div id="my-tasks-view" class="hidden">
+      <div id="view-as-row" class="hidden">
+        <label>Viewing tasks for:</label>
+        <select id="view-as-select"></select>
+      </div>
       <div id="my-tasks-container"></div>
       <div id="my-tasks-empty" class="empty-state hidden">Nothing on your plate — all caught up! 🎉</div>
     </div>
@@ -474,9 +496,12 @@
           <div class="qs-title">Other Parties</div>
           <button class="secondary small" id="share-contacts-btn">Share Contact Sheet</button>
         </div>
-        <div id="role-chips" class="role-chips"></div>
-        <div id="contacts-list"></div>
-        <button class="secondary" id="add-contact-btn" style="width:100%;margin-top:10px;">+ Add Contact</button>
+        <details id="contacts-details">
+          <summary class="contacts-summary">View / Add Parties (<span id="contacts-count">0</span>)</summary>
+          <div id="role-chips" class="role-chips"></div>
+          <div id="contacts-list"></div>
+          <button class="secondary" id="add-contact-btn" style="width:100%;margin-top:10px;">+ Add Contact</button>
+        </details>
       </div>
 
       <div id="phase-container"></div>
@@ -635,6 +660,7 @@ let currentTxnId = null;
 let currentTasks = [];
 let currentTxn = null;
 let directoryCache = [];
+let viewingAsId = null;
 const STANDARD_ROLES = ['Attorney','Opposing Agent','Lender','Title Company','Home Inspector','Insurance Agent','Appraiser'];
 
 const PHASES = [
@@ -725,8 +751,16 @@ async function enterApp(){
 
   await loadDirectory();
 
-  showList();
-  loadMyTasks(); // populate the "My Tasks" badge count right away, even before that tab is opened
+  if (currentMember.role === 'agent' && teamMembers.length > 1) {
+    $('view-as-row').classList.remove('hidden');
+    const sel = $('view-as-select');
+    sel.innerHTML = teamMembers.map(m => `<option value="${m.id}">${m.id === currentMember.id ? 'Me (' + m.name + ')' : m.name}</option>`).join('');
+    sel.value = currentMember.id;
+    sel.onchange = () => { viewingAsId = sel.value === currentMember.id ? null : sel.value; loadMyTasks(); };
+  }
+
+  showMyTasks();
+  loadTransactions(); // pre-load transaction list + badge data in the background
 }
 
 function roleLabel(role){
@@ -756,6 +790,7 @@ async function showMyTasks(){
   $('directory-view').classList.add('hidden');
   $('main-tabs').classList.remove('hidden');
   $('my-tasks-view').classList.remove('hidden');
+  setTab('mine');
   await loadMyTasks();
 }
 
@@ -780,28 +815,23 @@ async function loadMyTasks(){
     .select('*')
     .in('transaction_id', txnIds);
 
-  // Compute the lowest incomplete phase per transaction — tasks in
-  // phases beyond that are locked
-  const lockBoundary = {};
-  txnIds.forEach(id => {
-    const tTasks = (allTasks || []).filter(t => t.transaction_id === id);
-    const phases = [...new Set(tTasks.map(t => t.phase_number))].sort((a,b) => a-b);
-    let boundary = Infinity;
-    for (const p of phases) {
-      const pt = tTasks.filter(t => t.phase_number === p);
-      if (pt.some(t => t.status !== 'done')) { boundary = p; break; }
-    }
-    lockBoundary[id] = boundary;
-  });
-
   const mine = (allTasks || []).filter(t =>
-    t.assignee_id === currentMember.id && t.status === 'open'
+    t.assignee_id === (viewingAsId || currentMember.id) && t.status === 'open'
   );
 
+  // Badge always reflects the logged-in person's own tasks, regardless of who's being viewed
+  const myOwn = (allTasks || []).filter(t => t.assignee_id === currentMember.id && t.status === 'open');
+  const todayForBadge = new Date(); todayForBadge.setHours(0,0,0,0);
+  const ownBadgeCount = myOwn.filter(t => t.flagged || (t.due_date && new Date(t.due_date+'T00:00:00') <= todayForBadge)).length;
+  const badgeEl = $('mine-badge');
+  badgeEl.textContent = ownBadgeCount;
+  badgeEl.classList.toggle('hidden', ownBadgeCount === 0);
+
   const today = new Date(); today.setHours(0,0,0,0);
-  const groups = { overdue: [], today: [], soon: [], later: [], nodate: [] };
+  const groups = { flagged: [], overdue: [], today: [], soon: [], later: [], nodate: [] };
 
   mine.forEach(t => {
+    if (t.flagged) { groups.flagged.push(t); return; }
     if (!t.due_date) { groups.nodate.push(t); return; }
     const due = new Date(t.due_date + 'T00:00:00');
     const diff = Math.round((due - today) / 86400000);
@@ -814,15 +844,11 @@ async function loadMyTasks(){
   const sortByDue = (a,b) => (a.due_date || '9999').localeCompare(b.due_date || '9999');
   Object.values(groups).forEach(g => g.sort(sortByDue));
 
-  const badgeCount = groups.overdue.length + groups.today.length;
-  const badge = $('mine-badge');
-  badge.textContent = badgeCount;
-  badge.classList.toggle('hidden', badgeCount === 0);
-
   const container = $('my-tasks-container');
   container.innerHTML = '';
 
   const sections = [
+    ['flagged', 'Flagged for You', 'flagged-title'],
     ['overdue', 'Overdue', 'overdue'],
     ['today', 'Due Today', 'today'],
     ['soon', 'Next 2 Days', ''],
@@ -843,19 +869,14 @@ async function loadMyTasks(){
 
     items.forEach(task => {
       const txn = txnById[task.transaction_id];
-      const isLocked = task.phase_number > lockBoundary[task.transaction_id];
 
       const row = document.createElement('div');
       row.className = 'mt-row';
 
       const checkbox = document.createElement('div');
-      checkbox.className = 'checkbox' + (isLocked ? ' locked' : '');
+      checkbox.className = 'checkbox';
       checkbox.addEventListener('click', async (e) => {
         e.stopPropagation();
-        if (isLocked) {
-          alert('Finish the earlier phase on this transaction first.');
-          return;
-        }
         await db.from('transaction_tasks').update({
           status:'done', completed_by: currentMember.id, completed_at: new Date().toISOString()
         }).eq('id', task.id);
@@ -1067,6 +1088,7 @@ async function loadContacts(){
 
 function renderContacts(){
   renderRoleChips();
+  $('contacts-count').textContent = contactsCache.length;
   const container = $('contacts-list');
   if (contactsCache.length === 0) {
     container.innerHTML = '<div class="contacts-empty">No other parties added yet.</div>';
@@ -1339,7 +1361,6 @@ async function saveDealField(column, value){
 }
 
 function renderQuickStatus(){
-  const locks = computePhaseLocks(currentTasks);
   const milestones = currentTasks.filter(t => t.summary_label).sort((a,b) => a.phase_number - b.phase_number || a.sort_order - b.sort_order);
 
   const container = $('qs-milestones');
@@ -1348,7 +1369,7 @@ function renderQuickStatus(){
   if (milestones.length === 0) return;
 
   milestones.forEach(task => {
-    const isLocked = locks[task.phase_number];
+    const isLocked = false;
     const row = document.createElement('div');
     row.className = 'qs-milestone-row';
 
@@ -1429,8 +1450,6 @@ function renderPhases(){
   const container = $('phase-container');
   container.innerHTML = '';
 
-  const locks = computePhaseLocks(currentTasks);
-
   const phaseMap = new Map();
   currentTasks.forEach(t => { if (!phaseMap.has(t.phase_number)) phaseMap.set(t.phase_number, t.phase_name); });
   const dynamicPhases = [...phaseMap.entries()].sort((a,b) => a[0]-b[0]);
@@ -1438,7 +1457,7 @@ function renderPhases(){
   dynamicPhases.forEach(([num, name]) => {
     const phaseTasks = currentTasks.filter(t => t.phase_number === num);
     const done = phaseTasks.filter(t => t.status === 'done').length;
-    const isLocked = locks[num];
+    const isLocked = false; // phases no longer block each other — order is visible, not enforced
 
     const details = document.createElement('details');
     details.className = 'phase' + (isLocked ? ' locked' : '');
@@ -1475,7 +1494,23 @@ function renderPhases(){
 
 function renderTaskRow(task, isLocked){
   const row = document.createElement('div');
-  row.className = 'task-row' + (task.status === 'done' ? ' done' : '') + (isLocked ? ' locked' : '');
+  row.className = 'task-row' + (task.status === 'done' ? ' done' : '') + (task.flagged ? ' flagged' : '');
+
+  const flagBtn = document.createElement('button');
+  flagBtn.className = 'flag-btn' + (task.flagged ? ' active' : '');
+  flagBtn.type = 'button';
+  flagBtn.title = task.flagged ? 'Unflag this task' : 'Flag this task for attention';
+  flagBtn.textContent = task.flagged ? '🚩' : '⚑';
+  flagBtn.addEventListener('click', async () => {
+    const newVal = !task.flagged;
+    await db.from('transaction_tasks').update({ flagged: newVal }).eq('id', task.id);
+    task.flagged = newVal;
+    row.classList.toggle('flagged', newVal);
+    flagBtn.classList.toggle('active', newVal);
+    flagBtn.textContent = newVal ? '🚩' : '⚑';
+    flagBtn.title = newVal ? 'Unflag this task' : 'Flag this task for attention';
+    if (newVal) notifyTaskEvent('flagged', task);
+  });
 
   const checkbox = document.createElement('div');
   checkbox.className = 'checkbox' + (task.status === 'done' ? ' checked' : '') + (isLocked ? ' locked' : '');
@@ -1570,6 +1605,7 @@ function renderTaskRow(task, isLocked){
 
   row.appendChild(checkbox);
   row.appendChild(body);
+  row.appendChild(flagBtn);
   return row;
 }
 
@@ -1613,7 +1649,7 @@ $('add-task-save').addEventListener('click', async () => {
   const nextSort = phaseTasks.length ? Math.max(...phaseTasks.map(t => t.sort_order)) + 1 : 1;
 
   $('add-task-save').disabled = true;
-  const { error } = await db.from('transaction_tasks').insert({
+  const { data: newTask, error } = await db.from('transaction_tasks').insert({
     transaction_id: currentTxnId,
     phase_number: addTaskPhase.num,
     phase_name: addTaskPhase.name,
@@ -1621,10 +1657,11 @@ $('add-task-save').addEventListener('click', async () => {
     sort_order: nextSort,
     assignee_id: $('add-task-assignee').value || null,
     due_date: $('add-task-due').value || null
-  });
+  }).select().single();
   $('add-task-save').disabled = false;
 
   if (error) { $('add-task-err').textContent = error.message; return; }
+  if (newTask) notifyTaskEvent('created', newTask);
   $('add-task-modal').classList.add('hidden');
   await loadTasks();
 });
@@ -1634,6 +1671,33 @@ function escapeHtml(str){
   const div = document.createElement('div');
   div.textContent = str;
   return div.innerHTML;
+}
+
+async function notifyTaskEvent(action, task){
+  // Only notify when someone other than the assignee did this
+  if (!task.assignee_id || task.assignee_id === currentMember.id) return;
+  const assignee = teamMembers.find(m => m.id === task.assignee_id);
+  if (!assignee || !assignee.email) return;
+
+  const txn = txnCache.find(t => t.id === task.transaction_id) || currentTxn;
+  const propertyAddress = txn ? txn.property_address : '';
+
+  try {
+    await fetch(`${SUPABASE_URL}/functions/v1/task-notify`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'apikey': SUPABASE_ANON_KEY, 'Authorization': `Bearer ${SUPABASE_ANON_KEY}` },
+      body: JSON.stringify({
+        assignee_email: assignee.email,
+        assignee_name: assignee.name,
+        actor_name: currentMember.name,
+        action, // 'flagged' or 'created'
+        task_text: task.task_text,
+        property_address: propertyAddress
+      })
+    });
+  } catch (e) {
+    console.error('Notify failed (non-blocking):', e);
+  }
 }
 
 init();
