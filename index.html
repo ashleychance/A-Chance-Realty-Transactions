@@ -270,6 +270,10 @@
   .edit-task-btn:hover{ opacity:1; }
 
   .task-row.flagged{ background:var(--warning-bg); }
+  .task-row.task-highlight{
+    background:#fff2c4;
+    transition:background 0.4s ease;
+  }
   .flag-btn{
     background:none; border:none; font-size:20px; cursor:pointer; padding:2px 4px;
     opacity:.4; flex-shrink:0; margin-top:1px;
@@ -913,7 +917,7 @@ async function loadMyTasks(){
         <div class="mt-text">${escapeHtml(task.task_text)}</div>
         <div class="mt-sub">${escapeHtml(txn ? txn.property_address : '')} · ${escapeHtml(task.phase_name)}</div>
       `;
-      body.addEventListener('click', () => openTransaction(task.transaction_id));
+      body.addEventListener('click', () => openTransaction(task.transaction_id, task.id));
 
       const due = document.createElement('div');
       due.className = 'mt-due ' + (key === 'overdue' ? 'overdue' : key === 'today' ? 'today' : '');
@@ -1066,7 +1070,7 @@ $('new-txn-save').addEventListener('click', async () => {
 // ---------------- DETAIL VIEW ----------------
 $('back-btn').addEventListener('click', showList);
 
-async function openTransaction(id){
+async function openTransaction(id, focusTaskId){
   currentTxnId = id;
   $('list-view').classList.add('hidden');
   $('my-tasks-view').classList.add('hidden');
@@ -1098,6 +1102,8 @@ async function openTransaction(id){
 
   await loadTasks();
   await loadContacts();
+
+  if (focusTaskId) focusOnTask(focusTaskId);
 }
 
 // ---------------- CONTACTS ----------------
@@ -1470,6 +1476,21 @@ function computePhaseLocks(tasks){
   return locks;
 }
 
+function focusOnTask(taskId){
+  // Give the DOM a tick to finish rendering before we look for it
+  setTimeout(() => {
+    const row = document.querySelector(`.task-row[data-task-id="${taskId}"]`);
+    if (!row) return;
+
+    const details = row.closest('details.phase');
+    if (details) details.open = true;
+
+    row.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    row.classList.add('task-highlight');
+    setTimeout(() => row.classList.remove('task-highlight'), 2200);
+  }, 50);
+}
+
 function renderPhases(){
   const container = $('phase-container');
   container.innerHTML = '';
@@ -1519,6 +1540,7 @@ function renderPhases(){
 function renderTaskRow(task, isLocked){
   const row = document.createElement('div');
   row.className = 'task-row' + (task.status === 'done' ? ' done' : '') + (task.flagged ? ' flagged' : '');
+  row.dataset.taskId = task.id;
 
   const flagBtn = document.createElement('button');
   flagBtn.className = 'flag-btn' + (task.flagged ? ' active' : '');
