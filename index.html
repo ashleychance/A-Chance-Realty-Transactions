@@ -342,6 +342,8 @@
   .contacts-summary{ cursor:pointer; font-size:15px; color:var(--accent-dark); font-weight:600; list-style:none; }
   .contacts-summary::-webkit-details-marker{ display:none; }
 
+  .clients-section{ border-top:1px solid var(--border); padding-top:12px; margin-top:4px; }
+
   .contact-row{
     display:flex; align-items:center; gap:10px; padding:10px 0; border-top:1px solid var(--border); cursor:pointer;
   }
@@ -354,6 +356,14 @@
   .contact-name{ font-size:17px; font-weight:600; }
   .contact-sub{ font-size:14px; color:var(--text-muted); }
   .contacts-empty{ font-size:15px; color:var(--text-muted); padding:6px 0; }
+
+  .danger-zone{ margin:24px 0 8px; padding-top:12px; border-top:1px solid var(--border); }
+  .danger-btn{
+    width:100%; padding:11px 14px; border:1px solid var(--danger); border-radius:8px;
+    background:#fff; color:var(--danger); font-size:15px; font-weight:600; cursor:pointer; font-family:inherit;
+  }
+  .danger-btn:disabled{ opacity:.5; cursor:default; border-color:var(--border); color:var(--text-muted); }
+  .delete-warning{ font-size:14px; color:var(--text); line-height:1.5; margin:0 0 16px; }
 
   .activity-card{
     background:var(--surface); border:1px solid var(--border); border-radius:12px;
@@ -502,10 +512,17 @@
           <div class="qs-field"><label>Sale Price</label><input type="text" id="qs-sale-price" inputmode="decimal" placeholder="$" /></div>
           <div class="qs-field"><label>Opposing Agent</label><input type="text" id="qs-opp-agent" /></div>
           <div class="qs-field"><label>BAC</label><input type="text" id="qs-bac" placeholder="e.g. 3%" /></div>
-          <div class="qs-field"><label>Client Phone</label><input type="tel" id="qs-client-phone" /></div>
-          <div class="qs-field"><label>Client Email</label><input type="email" id="qs-client-email" /></div>
           <div class="qs-field" style="grid-column:1/-1;"><label>Agent Commission Note</label><input type="text" id="qs-agent-comm" /></div>
         </div>
+
+        <div class="clients-section">
+          <div class="qs-title-row">
+            <div class="qs-title" style="font-size:14px;">Clients</div>
+          </div>
+          <div id="clients-list"></div>
+          <button class="secondary" id="add-client-btn" style="width:100%;margin-top:8px;">+ Add Client</button>
+        </div>
+
         <div id="qs-milestones"></div>
       </div>
 
@@ -527,6 +544,10 @@
       <div class="activity-card">
         <div class="qs-title">Recent Activity</div>
         <div id="activity-feed"></div>
+      </div>
+
+      <div class="danger-zone">
+        <button class="danger-btn" id="delete-txn-btn">Delete This Transaction</button>
       </div>
     </div>
   </main>
@@ -698,6 +719,39 @@
     <div class="modal-actions">
       <button class="secondary" id="edit-txn-cancel">Cancel</button>
       <button class="primary" id="edit-txn-save">Save</button>
+    </div>
+  </div>
+</div>
+
+<!-- DELETE TRANSACTION MODAL -->
+<div id="delete-txn-modal" class="modal-backdrop hidden">
+  <div class="modal">
+    <h2>Delete Transaction?</h2>
+    <p class="delete-warning">This permanently deletes <strong id="delete-txn-address"></strong> — every task, note, contact, and activity record on it. This can't be undone.</p>
+    <div class="field">
+      <label>Type the property address exactly to confirm</label>
+      <input type="text" id="delete-txn-confirm-input" placeholder="Type the address here" />
+    </div>
+    <div class="err" id="delete-txn-err"></div>
+    <div class="modal-actions">
+      <button class="secondary" id="delete-txn-cancel">Cancel</button>
+      <button class="danger-btn" id="delete-txn-confirm-btn" disabled>Delete Permanently</button>
+    </div>
+  </div>
+</div>
+
+<!-- CLIENT MODAL -->
+<div id="client-modal" class="modal-backdrop hidden">
+  <div class="modal">
+    <h2 id="client-modal-title">Add Client</h2>
+    <div class="field"><label>Name</label><input type="text" id="client-name" /></div>
+    <div class="field"><label>Phone</label><input type="tel" id="client-phone" /></div>
+    <div class="field"><label>Email</label><input type="email" id="client-email" /></div>
+    <div class="err" id="client-err"></div>
+    <div class="modal-actions">
+      <button class="secondary" id="client-delete-btn" style="display:none;">Delete</button>
+      <button class="secondary" id="client-cancel">Cancel</button>
+      <button class="primary" id="client-save">Save</button>
     </div>
   </div>
 </div>
@@ -931,6 +985,7 @@ async function loadMyTasks(){
       checkbox.className = 'checkbox';
       checkbox.addEventListener('click', async (e) => {
         e.stopPropagation();
+        if (!confirm(`Mark this complete?\n\n"${task.task_text}"`)) return;
         await db.from('transaction_tasks').update({
           status:'done', completed_by: currentMember.id, completed_at: new Date().toISOString()
         }).eq('id', task.id);
@@ -1136,10 +1191,111 @@ async function openTransaction(id, focusTaskId){
   $('key-contract-date').onchange = () => saveKeyDate('contract_date', $('key-contract-date').value);
   $('key-closing-date').onchange = () => saveKeyDate('closing_date', $('key-closing-date').value);
 
+  $('qs-list-price').value = t.list_price ?? '';
+  $('qs-sale-price').value = t.sale_price ?? '';
+  $('qs-opp-agent').value = t.opposing_agent ?? '';
+  $('qs-bac').value = t.buyer_agent_commission ?? '';
+  $('qs-agent-comm').value = t.agent_commission_note ?? '';
+
+  $('qs-list-price').onchange = () => saveDealField('list_price', numOrNull($('qs-list-price').value));
+  $('qs-sale-price').onchange = () => saveDealField('sale_price', numOrNull($('qs-sale-price').value));
+  $('qs-opp-agent').onchange = () => saveDealField('opposing_agent', $('qs-opp-agent').value || null);
+  $('qs-bac').onchange = () => saveDealField('buyer_agent_commission', $('qs-bac').value || null);
+  $('qs-agent-comm').onchange = () => saveDealField('agent_commission_note', $('qs-agent-comm').value || null);
+
   await loadTasks();
   await loadContacts();
+  await loadClients();
 
   if (focusTaskId) focusOnTask(focusTaskId);
+}
+
+// ---------------- CLIENTS ----------------
+let clientsCache = [];
+let editingClientId = null;
+
+async function loadClients(){
+  const { data } = await db.from('transaction_clients').select('*').eq('transaction_id', currentTxnId).order('sort_order');
+  clientsCache = data || [];
+  renderClients();
+}
+
+function renderClients(){
+  const container = $('clients-list');
+  if (clientsCache.length === 0) {
+    container.innerHTML = '<div class="contacts-empty">No clients added yet.</div>';
+    return;
+  }
+  container.innerHTML = '';
+  clientsCache.forEach(c => {
+    const row = document.createElement('div');
+    row.className = 'contact-row';
+    row.innerHTML = `
+      <div class="contact-info">
+        <div class="contact-name">${escapeHtml(c.name || '(no name)')}</div>
+        <div class="contact-sub">${[c.phone, c.email].filter(Boolean).map(escapeHtml).join(' · ')}</div>
+      </div>
+    `;
+    row.addEventListener('click', () => openClientModal(c));
+    container.appendChild(row);
+  });
+}
+
+$('add-client-btn').addEventListener('click', () => openClientModal(null));
+
+function openClientModal(c){
+  editingClientId = c ? c.id : null;
+  $('client-modal-title').textContent = c ? 'Edit Client' : 'Add Client';
+  $('client-name').value = c ? (c.name || '') : '';
+  $('client-phone').value = c ? (c.phone || '') : '';
+  $('client-email').value = c ? (c.email || '') : '';
+  $('client-err').textContent = '';
+  $('client-delete-btn').style.display = c ? '' : 'none';
+  $('client-modal').classList.remove('hidden');
+}
+$('client-cancel').addEventListener('click', () => $('client-modal').classList.add('hidden'));
+
+$('client-save').addEventListener('click', async () => {
+  const payload = {
+    transaction_id: currentTxnId,
+    name: $('client-name').value.trim() || null,
+    phone: $('client-phone').value.trim() || null,
+    email: $('client-email').value.trim() || null,
+  };
+  $('client-save').disabled = true;
+  let error;
+  if (editingClientId) {
+    ({ error } = await db.from('transaction_clients').update(payload).eq('id', editingClientId));
+  } else {
+    payload.sort_order = clientsCache.length;
+    ({ error } = await db.from('transaction_clients').insert(payload));
+  }
+  $('client-save').disabled = false;
+  if (error) { $('client-err').textContent = error.message; return; }
+  $('client-modal').classList.add('hidden');
+  await loadClients();
+  await syncClientNameSummary();
+});
+
+$('client-delete-btn').addEventListener('click', async () => {
+  if (!editingClientId) return;
+  if (!confirm('Remove this client?')) return;
+  await db.from('transaction_clients').delete().eq('id', editingClientId);
+  $('client-modal').classList.add('hidden');
+  await loadClients();
+  await syncClientNameSummary();
+});
+
+// Keeps the header/list-card display name in sync with the client list,
+// e.g. "John Smith & Jane Smith" — doesn't touch it if Ashley has typed
+// a custom label and there are no structured clients yet
+async function syncClientNameSummary(){
+  if (clientsCache.length === 0) return;
+  const summary = clientsCache.map(c => c.name).filter(Boolean).join(' & ');
+  if (!summary) return;
+  await db.from('transactions').update({ client_name: summary }).eq('id', currentTxnId);
+  currentTxn.client_name = summary;
+  $('detail-client').textContent = summary;
 }
 
 // ---------------- CONTACTS ----------------
@@ -1397,23 +1553,6 @@ $('dir-delete-btn').addEventListener('click', async () => {
 async function saveKeyDate(column, value){
   await db.from('transactions').update({ [column]: value || null }).eq('id', currentTxnId);
   await db.rpc('recalc_transaction_due_dates', { p_transaction_id: currentTxnId });
-  $('qs-list-price').value = t.list_price ?? '';
-  $('qs-sale-price').value = t.sale_price ?? '';
-  $('qs-opp-agent').value = t.opposing_agent ?? '';
-  $('qs-bac').value = t.buyer_agent_commission ?? '';
-  $('qs-agent-comm').value = t.agent_commission_note ?? '';
-  $('qs-client-phone').value = t.client_phone ?? '';
-  $('qs-client-email').value = t.client_email ?? '';
-
-  $('qs-client-phone').onchange = () => saveDealField('client_phone', $('qs-client-phone').value || null);
-  $('qs-client-email').onchange = () => saveDealField('client_email', $('qs-client-email').value || null);
-
-  $('qs-list-price').onchange = () => saveDealField('list_price', numOrNull($('qs-list-price').value));
-  $('qs-sale-price').onchange = () => saveDealField('sale_price', numOrNull($('qs-sale-price').value));
-  $('qs-opp-agent').onchange = () => saveDealField('opposing_agent', $('qs-opp-agent').value || null);
-  $('qs-bac').onchange = () => saveDealField('buyer_agent_commission', $('qs-bac').value || null);
-  $('qs-agent-comm').onchange = () => saveDealField('agent_commission_note', $('qs-agent-comm').value || null);
-
   await loadTasks();
 }
 
@@ -1490,11 +1629,13 @@ function renderActivityFeed(){
 }
 
 async function loadTasks(){
+  const scrollY = window.scrollY;
   const { data: tasks } = await db.from('transaction_tasks').select('*').eq('transaction_id', currentTxnId).order('phase_number').order('sort_order');
   currentTasks = tasks || [];
   renderQuickStatus();
   renderPhases();
   renderActivityFeed();
+  window.scrollTo(0, scrollY);
 }
 
 function computePhaseLocks(tasks){
@@ -1529,6 +1670,13 @@ function focusOnTask(taskId){
 
 function renderPhases(){
   const container = $('phase-container');
+
+  // Remember which phases were open before we rebuild, so checking
+  // off a task doesn't collapse everything back to the top
+  const openPhaseNums = new Set(
+    [...container.querySelectorAll('details.phase[open]')].map(d => d.dataset.phaseNum)
+  );
+
   container.innerHTML = '';
 
   const phaseMap = new Map();
@@ -1542,6 +1690,8 @@ function renderPhases(){
 
     const details = document.createElement('details');
     details.className = 'phase' + (isLocked ? ' locked' : '');
+    details.dataset.phaseNum = num;
+    if (openPhaseNums.has(String(num))) details.open = true;
 
     const summary = document.createElement('summary');
     summary.innerHTML = `
@@ -1715,6 +1865,9 @@ function applyDueStyle(input, task){
 
 async function toggleTask(task){
   const isDone = task.status === 'done';
+  if (!isDone) {
+    if (!confirm(`Mark this complete?\n\n"${task.task_text}"`)) return;
+  }
   const update = isDone
     ? { status:'open', completed_by:null, completed_at:null }
     : { status:'done', completed_by: currentMember.id, completed_at: new Date().toISOString() };
@@ -1758,6 +1911,32 @@ $('add-task-save').addEventListener('click', async () => {
   if (newTask) notifyTaskEvent('created', newTask);
   $('add-task-modal').classList.add('hidden');
   await loadTasks();
+});
+
+$('delete-txn-btn').addEventListener('click', () => {
+  $('delete-txn-address').textContent = currentTxn.property_address;
+  $('delete-txn-confirm-input').value = '';
+  $('delete-txn-confirm-btn').disabled = true;
+  $('delete-txn-err').textContent = '';
+  $('delete-txn-modal').classList.remove('hidden');
+});
+$('delete-txn-cancel').addEventListener('click', () => $('delete-txn-modal').classList.add('hidden'));
+
+$('delete-txn-confirm-input').addEventListener('input', () => {
+  const match = $('delete-txn-confirm-input').value.trim().toLowerCase() === (currentTxn.property_address || '').trim().toLowerCase();
+  $('delete-txn-confirm-btn').disabled = !match;
+});
+
+$('delete-txn-confirm-btn').addEventListener('click', async () => {
+  $('delete-txn-confirm-btn').disabled = true;
+  const { error } = await db.from('transactions').delete().eq('id', currentTxnId);
+  if (error) {
+    $('delete-txn-err').textContent = error.message;
+    $('delete-txn-confirm-btn').disabled = false;
+    return;
+  }
+  $('delete-txn-modal').classList.add('hidden');
+  showList();
 });
 
 let editingTaskRef = null;
