@@ -331,6 +331,18 @@
     background:var(--bg); color:var(--text-muted); cursor:pointer; font-family:inherit;
   }
 
+  .dir-suggest-box{
+    position:absolute; top:100%; left:0; right:0; z-index:20; background:#fff;
+    border:1px solid var(--border); border-radius:8px; margin-top:2px; max-height:180px; overflow-y:auto;
+  }
+  .dir-suggest-box:empty{ display:none; }
+  .dir-suggest-item{
+    padding:8px 10px; font-size:13px; cursor:pointer; border-bottom:1px solid var(--border);
+  }
+  .dir-suggest-item:last-child{ border-bottom:none; }
+  .dir-suggest-item:hover{ background:var(--bg); }
+  .dir-suggest-item .dsug-role{ font-size:10px; color:var(--accent-dark); font-weight:700; text-transform:uppercase; }
+
   #contact-dir-suggestions{ margin-top:6px; }
   .dir-suggestion{
     padding:8px 10px; border:1px solid var(--border); border-radius:8px; margin-top:5px;
@@ -510,7 +522,11 @@
         <div class="qs-grid">
           <div class="qs-field"><label>List Price</label><input type="text" id="qs-list-price" inputmode="decimal" placeholder="$" /></div>
           <div class="qs-field"><label>Sale Price</label><input type="text" id="qs-sale-price" inputmode="decimal" placeholder="$" /></div>
-          <div class="qs-field"><label>Opposing Agent</label><input type="text" id="qs-opp-agent" /></div>
+          <div class="qs-field" style="position:relative;">
+            <label>Opposing Agent</label>
+            <input type="text" id="qs-opp-agent" autocomplete="off" />
+            <div id="opp-agent-suggestions" class="dir-suggest-box"></div>
+          </div>
           <div class="qs-field"><label>BAC</label><input type="text" id="qs-bac" placeholder="e.g. 3%" /></div>
           <div class="qs-field" style="grid-column:1/-1;"><label>Agent Commission Note</label><input type="text" id="qs-agent-comm" /></div>
         </div>
@@ -625,6 +641,7 @@
 <div id="contact-modal" class="modal-backdrop hidden">
   <div class="modal">
     <h2 id="contact-modal-title">Add Contact</h2>
+    <button class="secondary hidden" id="contact-import-contact-btn" style="width:100%;margin-bottom:12px;">📱 Import from Phone Contacts</button>
     <div class="field">
       <label>Search Directory</label>
       <input type="text" id="contact-dir-search" placeholder="Type a name or company..." />
@@ -661,6 +678,7 @@
 <div id="dir-modal" class="modal-backdrop hidden">
   <div class="modal">
     <h2 id="dir-modal-title">Add Directory Contact</h2>
+    <button class="secondary hidden" id="dir-import-contact-btn" style="width:100%;margin-bottom:12px;">📱 Import from Phone Contacts</button>
     <div class="field">
       <label>Role</label>
       <select id="dir-role">
@@ -744,6 +762,7 @@
 <div id="client-modal" class="modal-backdrop hidden">
   <div class="modal">
     <h2 id="client-modal-title">Add Client</h2>
+    <button class="secondary hidden" id="client-import-contact-btn" style="width:100%;margin-bottom:12px;">📱 Import from Phone Contacts</button>
     <div class="field"><label>Name</label><input type="text" id="client-name" /></div>
     <div class="field"><label>Phone</label><input type="tel" id="client-phone" /></div>
     <div class="field"><label>Email</label><input type="email" id="client-email" /></div>
@@ -770,6 +789,28 @@ let currentTxn = null;
 let directoryCache = [];
 let viewingAsId = null;
 const STANDARD_ROLES = ['Attorney','Opposing Agent','Lender','Title Company','Home Inspector','Insurance Agent','Appraiser'];
+
+// Contact Picker API — only available in Chrome on Android as of this
+// writing. Not supported in Safari/iOS at all. We feature-detect and
+// only show the import button where it actually works.
+const contactPickerSupported = ('contacts' in navigator && 'ContactsManager' in window);
+
+async function pickPhoneContact(){
+  try {
+    const props = ['name', 'tel', 'email'];
+    const results = await navigator.contacts.select(props, { multiple: false });
+    if (!results || results.length === 0) return null;
+    const c = results[0];
+    return {
+      name: (c.name && c.name[0]) || '',
+      phone: (c.tel && c.tel[0]) || '',
+      email: (c.email && c.email[0]) || ''
+    };
+  } catch (e) {
+    console.error('Contact picker cancelled or failed:', e);
+    return null;
+  }
+}
 
 const PHASES = [
   [1,'Pre-Listing Setup'],[2,'After Listing Agreement Signed'],[3,'Marketing Prep'],
@@ -1200,6 +1241,32 @@ async function openTransaction(id, focusTaskId){
   $('qs-list-price').onchange = () => saveDealField('list_price', numOrNull($('qs-list-price').value));
   $('qs-sale-price').onchange = () => saveDealField('sale_price', numOrNull($('qs-sale-price').value));
   $('qs-opp-agent').onchange = () => saveDealField('opposing_agent', $('qs-opp-agent').value || null);
+
+  $('qs-opp-agent').oninput = () => {
+    const q = $('qs-opp-agent').value.trim().toLowerCase();
+    const box = $('opp-agent-suggestions');
+    if (!q) { box.innerHTML = ''; return; }
+    const matches = directoryCache
+      .filter(c => (c.name||'') .toLowerCase().includes(q) || (c.company||'').toLowerCase().includes(q))
+      .sort((a,b) => (a.role === 'Opposing Agent' ? -1 : 0) - (b.role === 'Opposing Agent' ? -1 : 0))
+      .slice(0, 5);
+    box.innerHTML = matches.map(c => `
+      <div class="dir-suggest-item" data-name="${escapeHtml(c.name || '')}">
+        <div class="dsug-role">${escapeHtml(c.role)}</div>
+        <div>${escapeHtml(c.name || '')}${c.company ? ' · ' + escapeHtml(c.company) : ''}</div>
+      </div>
+    `).join('');
+    box.querySelectorAll('.dir-suggest-item').forEach(el => {
+      el.addEventListener('click', () => {
+        $('qs-opp-agent').value = el.dataset.name;
+        box.innerHTML = '';
+        saveDealField('opposing_agent', el.dataset.name || null);
+      });
+    });
+  };
+  $('qs-opp-agent').addEventListener('blur', () => {
+    setTimeout(() => { $('opp-agent-suggestions').innerHTML = ''; }, 150);
+  });
   $('qs-bac').onchange = () => saveDealField('buyer_agent_commission', $('qs-bac').value || null);
   $('qs-agent-comm').onchange = () => saveDealField('agent_commission_note', $('qs-agent-comm').value || null);
 
@@ -1937,6 +2004,37 @@ $('delete-txn-confirm-btn').addEventListener('click', async () => {
   }
   $('delete-txn-modal').classList.add('hidden');
   showList();
+});
+
+// Show the import button only on devices that actually support it
+if (contactPickerSupported) {
+  $('dir-import-contact-btn').classList.remove('hidden');
+  $('contact-import-contact-btn').classList.remove('hidden');
+  $('client-import-contact-btn').classList.remove('hidden');
+}
+
+$('dir-import-contact-btn').addEventListener('click', async () => {
+  const c = await pickPhoneContact();
+  if (!c) return;
+  if (c.name) $('dir-name').value = c.name;
+  if (c.phone) $('dir-phone').value = c.phone;
+  if (c.email) $('dir-email').value = c.email;
+});
+
+$('contact-import-contact-btn').addEventListener('click', async () => {
+  const c = await pickPhoneContact();
+  if (!c) return;
+  if (c.name) $('contact-name').value = c.name;
+  if (c.phone) $('contact-phone').value = c.phone;
+  if (c.email) $('contact-email').value = c.email;
+});
+
+$('client-import-contact-btn').addEventListener('click', async () => {
+  const c = await pickPhoneContact();
+  if (!c) return;
+  if (c.name) $('client-name').value = c.name;
+  if (c.phone) $('client-phone').value = c.phone;
+  if (c.email) $('client-email').value = c.email;
 });
 
 let editingTaskRef = null;
