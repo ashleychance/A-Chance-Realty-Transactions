@@ -285,6 +285,43 @@
   .add-task-row{ padding:12px 16px; }
   .add-task-row input{ margin-bottom:8px; }
 
+  .qs-title-row{ display:flex; align-items:center; justify-content:space-between; margin-bottom:12px; }
+  .qs-title-row .qs-title{ margin-bottom:0; }
+  button.secondary.small{ padding:6px 10px; font-size:12px; width:auto; }
+
+  .checkbox-label{
+    display:flex; align-items:center; gap:8px; font-size:13px; color:var(--text-muted);
+    margin:2px 0 14px; text-transform:none; font-weight:400; letter-spacing:0;
+  }
+  .checkbox-label input{ width:auto; }
+
+  .role-chips{ display:flex; flex-wrap:wrap; gap:6px; margin-bottom:10px; }
+  .role-chip{
+    font-size:12px; padding:5px 11px; border-radius:20px; border:1px dashed var(--border);
+    background:var(--bg); color:var(--text-muted); cursor:pointer; font-family:inherit;
+  }
+
+  #contact-dir-suggestions{ margin-top:6px; }
+  .dir-suggestion{
+    padding:8px 10px; border:1px solid var(--border); border-radius:8px; margin-top:5px;
+    cursor:pointer; font-size:13px; background:#fff;
+  }
+  .dir-suggestion:hover{ background:var(--bg); }
+  .dir-suggestion .dsug-role{ font-size:10.5px; color:var(--accent-dark); font-weight:700; text-transform:uppercase; }
+
+  .contact-row{
+    display:flex; align-items:center; gap:10px; padding:10px 0; border-top:1px solid var(--border); cursor:pointer;
+  }
+  .contact-row:first-child{ border-top:none; }
+  .contact-role-tag{
+    font-size:10.5px; font-weight:700; text-transform:uppercase; letter-spacing:.03em;
+    background:var(--bg); color:var(--accent-dark); padding:3px 8px; border-radius:20px; white-space:nowrap;
+  }
+  .contact-info{ flex:1; min-width:0; }
+  .contact-name{ font-size:14px; font-weight:600; }
+  .contact-sub{ font-size:12px; color:var(--text-muted); }
+  .contacts-empty{ font-size:13px; color:var(--text-muted); padding:6px 0; }
+
   .activity-card{
     background:var(--surface); border:1px solid var(--border); border-radius:12px;
     padding:16px; margin:16px 0 8px;
@@ -362,6 +399,14 @@
     <div class="tabs" id="main-tabs">
       <button class="tab active" id="tab-txns">Transactions</button>
       <button class="tab" id="tab-mine">My Tasks <span class="tab-badge hidden" id="mine-badge">0</span></button>
+      <button class="tab" id="tab-directory">Directory</button>
+    </div>
+
+    <!-- DIRECTORY VIEW -->
+    <div id="directory-view" class="hidden">
+      <input type="text" id="dir-search" class="search-input" placeholder="Search directory..." />
+      <div id="directory-list"></div>
+      <button class="fab" id="new-dir-fab">+</button>
     </div>
 
     <!-- LIST VIEW -->
@@ -417,9 +462,21 @@
           <div class="qs-field"><label>Sale Price</label><input type="text" id="qs-sale-price" inputmode="decimal" placeholder="$" /></div>
           <div class="qs-field"><label>Opposing Agent</label><input type="text" id="qs-opp-agent" /></div>
           <div class="qs-field"><label>BAC</label><input type="text" id="qs-bac" placeholder="e.g. 3%" /></div>
+          <div class="qs-field"><label>Client Phone</label><input type="tel" id="qs-client-phone" /></div>
+          <div class="qs-field"><label>Client Email</label><input type="email" id="qs-client-email" /></div>
           <div class="qs-field" style="grid-column:1/-1;"><label>Agent Commission Note</label><input type="text" id="qs-agent-comm" /></div>
         </div>
         <div id="qs-milestones"></div>
+      </div>
+
+      <div class="qs-card">
+        <div class="qs-title-row">
+          <div class="qs-title">Other Parties</div>
+          <button class="secondary small" id="share-contacts-btn">Share Contact Sheet</button>
+        </div>
+        <div id="role-chips" class="role-chips"></div>
+        <div id="contacts-list"></div>
+        <button class="secondary" id="add-contact-btn" style="width:100%;margin-top:10px;">+ Add Contact</button>
       </div>
 
       <div id="phase-container"></div>
@@ -500,6 +557,72 @@
   </div>
 </div>
 
+<!-- CONTACT MODAL -->
+<div id="contact-modal" class="modal-backdrop hidden">
+  <div class="modal">
+    <h2 id="contact-modal-title">Add Contact</h2>
+    <div class="field">
+      <label>Search Directory</label>
+      <input type="text" id="contact-dir-search" placeholder="Type a name or company..." />
+      <div id="contact-dir-suggestions"></div>
+    </div>
+    <div class="field">
+      <label>Role</label>
+      <select id="contact-role">
+        <option>Attorney</option>
+        <option>Opposing Agent</option>
+        <option>Lender</option>
+        <option>Title Company</option>
+        <option>Home Inspector</option>
+        <option>Insurance Agent</option>
+        <option>Appraiser</option>
+        <option>Other</option>
+      </select>
+    </div>
+    <div class="field"><label>Name</label><input type="text" id="contact-name" /></div>
+    <div class="field"><label>Company</label><input type="text" id="contact-company" /></div>
+    <div class="field"><label>Phone</label><input type="tel" id="contact-phone" /></div>
+    <div class="field"><label>Email</label><input type="email" id="contact-email" /></div>
+    <div class="err" id="contact-err"></div>
+    <label class="checkbox-label"><input type="checkbox" id="contact-save-to-dir" checked /> Also save to Directory for reuse</label>
+    <div class="modal-actions">
+      <button class="secondary" id="contact-delete-btn" style="display:none;">Delete</button>
+      <button class="secondary" id="contact-cancel">Cancel</button>
+      <button class="primary" id="contact-save">Save</button>
+    </div>
+  </div>
+</div>
+
+<!-- DIRECTORY ENTRY MODAL -->
+<div id="dir-modal" class="modal-backdrop hidden">
+  <div class="modal">
+    <h2 id="dir-modal-title">Add Directory Contact</h2>
+    <div class="field">
+      <label>Role</label>
+      <select id="dir-role">
+        <option>Attorney</option>
+        <option>Opposing Agent</option>
+        <option>Lender</option>
+        <option>Title Company</option>
+        <option>Home Inspector</option>
+        <option>Insurance Agent</option>
+        <option>Appraiser</option>
+        <option>Other</option>
+      </select>
+    </div>
+    <div class="field"><label>Name</label><input type="text" id="dir-name" /></div>
+    <div class="field"><label>Company</label><input type="text" id="dir-company" /></div>
+    <div class="field"><label>Phone</label><input type="tel" id="dir-phone" /></div>
+    <div class="field"><label>Email</label><input type="email" id="dir-email" /></div>
+    <div class="err" id="dir-err"></div>
+    <div class="modal-actions">
+      <button class="secondary" id="dir-delete-btn" style="display:none;">Delete</button>
+      <button class="secondary" id="dir-cancel">Cancel</button>
+      <button class="primary" id="dir-save">Save</button>
+    </div>
+  </div>
+</div>
+
 <script>
 const SUPABASE_URL = "https://nmttottwzbxumsmqligf.supabase.co";
 const SUPABASE_ANON_KEY = "sb_publishable_e-ch_oh_LNB0kHR5X09rvQ_HQdueOsL";
@@ -510,6 +633,9 @@ let currentMember = null;
 let teamMembers = [];
 let currentTxnId = null;
 let currentTasks = [];
+let currentTxn = null;
+let directoryCache = [];
+const STANDARD_ROLES = ['Attorney','Opposing Agent','Lender','Title Company','Home Inspector','Insurance Agent','Appraiser'];
 
 const PHASES = [
   [1,'Pre-Listing Setup'],[2,'After Listing Agreement Signed'],[3,'Marketing Prep'],
@@ -597,6 +723,8 @@ async function enterApp(){
   const { data: members } = await db.from('team_members').select('*').order('name');
   teamMembers = members || [];
 
+  await loadDirectory();
+
   showList();
   loadMyTasks(); // populate the "My Tasks" badge count right away, even before that tab is opened
 }
@@ -612,10 +740,12 @@ function roleLabel(role){
 // ---------------- TABS ----------------
 $('tab-txns').addEventListener('click', () => { setTab('txns'); showList(); });
 $('tab-mine').addEventListener('click', () => { setTab('mine'); showMyTasks(); });
+$('tab-directory').addEventListener('click', () => { setTab('directory'); showDirectory(); });
 
 function setTab(which){
   $('tab-txns').classList.toggle('active', which === 'txns');
   $('tab-mine').classList.toggle('active', which === 'mine');
+  $('tab-directory').classList.toggle('active', which === 'directory');
 }
 
 // ---------------- MY TASKS VIEW ----------------
@@ -623,6 +753,7 @@ async function showMyTasks(){
   currentTxnId = null;
   $('list-view').classList.add('hidden');
   $('detail-view').classList.add('hidden');
+  $('directory-view').classList.add('hidden');
   $('main-tabs').classList.remove('hidden');
   $('my-tasks-view').classList.remove('hidden');
   await loadMyTasks();
@@ -763,6 +894,7 @@ async function showList(){
   currentTxnId = null;
   $('detail-view').classList.add('hidden');
   $('my-tasks-view').classList.add('hidden');
+  $('directory-view').classList.add('hidden');
   $('main-tabs').classList.remove('hidden');
   $('list-view').classList.remove('hidden');
   setTab('txns');
@@ -893,10 +1025,12 @@ async function openTransaction(id){
   currentTxnId = id;
   $('list-view').classList.add('hidden');
   $('my-tasks-view').classList.add('hidden');
+  $('directory-view').classList.add('hidden');
   $('main-tabs').classList.add('hidden');
   $('detail-view').classList.remove('hidden');
 
   const { data: t } = await db.from('transactions').select('*').eq('id', id).single();
+  currentTxn = t;
   $('detail-address').textContent = t.property_address;
   $('detail-client').textContent = t.client_name || '';
 
@@ -918,7 +1052,259 @@ async function openTransaction(id){
   $('key-closing-date').onchange = () => saveKeyDate('closing_date', $('key-closing-date').value);
 
   await loadTasks();
+  await loadContacts();
 }
+
+// ---------------- CONTACTS ----------------
+let contactsCache = [];
+let editingContactId = null;
+
+async function loadContacts(){
+  const { data } = await db.from('transaction_contacts').select('*').eq('transaction_id', currentTxnId).order('sort_order');
+  contactsCache = data || [];
+  renderContacts();
+}
+
+function renderContacts(){
+  renderRoleChips();
+  const container = $('contacts-list');
+  if (contactsCache.length === 0) {
+    container.innerHTML = '<div class="contacts-empty">No other parties added yet.</div>';
+    return;
+  }
+  container.innerHTML = '';
+  contactsCache.forEach(c => {
+    const row = document.createElement('div');
+    row.className = 'contact-row';
+    row.innerHTML = `
+      <span class="contact-role-tag">${escapeHtml(c.role)}</span>
+      <div class="contact-info">
+        <div class="contact-name">${escapeHtml(c.name || '(no name)')}${c.company ? ' · ' + escapeHtml(c.company) : ''}</div>
+        <div class="contact-sub">${[c.phone, c.email].filter(Boolean).map(escapeHtml).join(' · ')}</div>
+      </div>
+    `;
+    row.addEventListener('click', () => openContactModal(c));
+    container.appendChild(row);
+  });
+}
+
+$('add-contact-btn').addEventListener('click', () => openContactModal(null, null));
+
+function renderRoleChips(){
+  const presentRoles = new Set(contactsCache.map(c => c.role));
+  const missing = STANDARD_ROLES.filter(r => !presentRoles.has(r));
+  const container = $('role-chips');
+  container.innerHTML = missing.map(r => `<button class="role-chip" data-role="${escapeHtml(r)}">+ ${escapeHtml(r)}</button>`).join('');
+  container.querySelectorAll('.role-chip').forEach(btn => {
+    btn.addEventListener('click', () => openContactModal(null, btn.dataset.role));
+  });
+}
+
+function openContactModal(contact, presetRole){
+  editingContactId = contact ? contact.id : null;
+  $('contact-modal-title').textContent = contact ? 'Edit Contact' : 'Add Contact';
+  $('contact-role').value = contact ? contact.role : (presetRole || 'Attorney');
+  $('contact-name').value = contact ? (contact.name || '') : '';
+  $('contact-company').value = contact ? (contact.company || '') : '';
+  $('contact-phone').value = contact ? (contact.phone || '') : '';
+  $('contact-email').value = contact ? (contact.email || '') : '';
+  $('contact-err').textContent = '';
+  $('contact-delete-btn').style.display = contact ? '' : 'none';
+  $('contact-dir-search').value = '';
+  $('contact-dir-suggestions').innerHTML = '';
+  $('contact-save-to-dir').checked = !contact;
+  $('contact-modal').classList.remove('hidden');
+}
+$('contact-cancel').addEventListener('click', () => $('contact-modal').classList.add('hidden'));
+
+$('contact-dir-search').addEventListener('input', () => {
+  const q = $('contact-dir-search').value.trim().toLowerCase();
+  const box = $('contact-dir-suggestions');
+  if (!q) { box.innerHTML = ''; return; }
+  const matches = directoryCache.filter(c =>
+    (c.role + ' ' + (c.name||'') + ' ' + (c.company||'')).toLowerCase().includes(q)
+  ).slice(0, 5);
+  box.innerHTML = matches.map(c => `
+    <div class="dir-suggestion" data-id="${c.id}">
+      <div class="dsug-role">${escapeHtml(c.role)}</div>
+      <div>${escapeHtml(c.name || '')}${c.company ? ' · ' + escapeHtml(c.company) : ''}</div>
+    </div>
+  `).join('') || '<div class="contacts-empty">No matches — fill in the fields below.</div>';
+
+  box.querySelectorAll('.dir-suggestion').forEach(el => {
+    el.addEventListener('click', () => {
+      const c = directoryCache.find(x => x.id === el.dataset.id);
+      if (!c) return;
+      $('contact-role').value = c.role;
+      $('contact-name').value = c.name || '';
+      $('contact-company').value = c.company || '';
+      $('contact-phone').value = c.phone || '';
+      $('contact-email').value = c.email || '';
+      $('contact-save-to-dir').checked = false; // already in directory
+      box.innerHTML = '';
+      $('contact-dir-search').value = '';
+    });
+  });
+});
+
+$('contact-save').addEventListener('click', async () => {
+  const payload = {
+    transaction_id: currentTxnId,
+    role: $('contact-role').value,
+    name: $('contact-name').value.trim() || null,
+    company: $('contact-company').value.trim() || null,
+    phone: $('contact-phone').value.trim() || null,
+    email: $('contact-email').value.trim() || null,
+  };
+  $('contact-save').disabled = true;
+  let error;
+  if (editingContactId) {
+    ({ error } = await db.from('transaction_contacts').update(payload).eq('id', editingContactId));
+  } else {
+    payload.sort_order = contactsCache.length;
+    ({ error } = await db.from('transaction_contacts').insert(payload));
+  }
+  $('contact-save').disabled = false;
+  if (error) { $('contact-err').textContent = error.message; return; }
+
+  if ($('contact-save-to-dir').checked && payload.name) {
+    await db.from('directory_contacts').insert({
+      role: payload.role, name: payload.name, company: payload.company,
+      phone: payload.phone, email: payload.email
+    });
+    await loadDirectory();
+  }
+
+  $('contact-modal').classList.add('hidden');
+  await loadContacts();
+});
+
+$('contact-delete-btn').addEventListener('click', async () => {
+  if (!editingContactId) return;
+  if (!confirm('Remove this contact?')) return;
+  await db.from('transaction_contacts').delete().eq('id', editingContactId);
+  $('contact-modal').classList.add('hidden');
+  await loadContacts();
+});
+
+$('share-contacts-btn').addEventListener('click', () => {
+  const t = currentTxn;
+  let body = `Contact Sheet — ${t.property_address}\n\n`;
+
+  body += `CLIENT\n${t.client_name || '(no name on file)'}\n`;
+  if (t.client_phone) body += `Phone: ${t.client_phone}\n`;
+  if (t.client_email) body += `Email: ${t.client_email}\n`;
+  body += `\n`;
+
+  if (contactsCache.length === 0) {
+    body += `(No other parties added yet)\n`;
+  } else {
+    contactsCache.forEach(c => {
+      body += `${c.role.toUpperCase()}\n`;
+      if (c.name) body += `${c.name}${c.company ? ' — ' + c.company : ''}\n`;
+      if (c.phone) body += `Phone: ${c.phone}\n`;
+      if (c.email) body += `Email: ${c.email}\n`;
+      body += `\n`;
+    });
+  }
+
+  const subject = `Contact Sheet — ${t.property_address}`;
+  const mailto = `mailto:?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
+  window.location.href = mailto;
+});
+
+// ---------------- DIRECTORY ----------------
+async function loadDirectory(){
+  const { data } = await db.from('directory_contacts').select('*').order('role').order('name');
+  directoryCache = data || [];
+}
+
+async function showDirectory(){
+  $('list-view').classList.add('hidden');
+  $('my-tasks-view').classList.add('hidden');
+  $('detail-view').classList.add('hidden');
+  $('directory-view').classList.remove('hidden');
+  await loadDirectory();
+  renderDirectoryList();
+}
+
+$('dir-search').addEventListener('input', renderDirectoryList);
+
+function renderDirectoryList(){
+  const search = $('dir-search').value.trim().toLowerCase();
+  const filtered = directoryCache.filter(c => {
+    if (!search) return true;
+    return (c.role + ' ' + (c.name||'') + ' ' + (c.company||'')).toLowerCase().includes(search);
+  });
+
+  const container = $('directory-list');
+  if (filtered.length === 0) {
+    container.innerHTML = '<div class="contacts-empty">No directory contacts yet. Tap + to add one.</div>';
+    return;
+  }
+  container.innerHTML = '';
+  filtered.forEach(c => {
+    const row = document.createElement('div');
+    row.className = 'contact-row';
+    row.innerHTML = `
+      <span class="contact-role-tag">${escapeHtml(c.role)}</span>
+      <div class="contact-info">
+        <div class="contact-name">${escapeHtml(c.name || '(no name)')}${c.company ? ' · ' + escapeHtml(c.company) : ''}</div>
+        <div class="contact-sub">${[c.phone, c.email].filter(Boolean).map(escapeHtml).join(' · ')}</div>
+      </div>
+    `;
+    row.addEventListener('click', () => openDirModal(c));
+    container.appendChild(row);
+  });
+}
+
+$('new-dir-fab').addEventListener('click', () => openDirModal(null));
+
+let editingDirId = null;
+function openDirModal(c){
+  editingDirId = c ? c.id : null;
+  $('dir-modal-title').textContent = c ? 'Edit Directory Contact' : 'Add Directory Contact';
+  $('dir-role').value = c ? c.role : 'Attorney';
+  $('dir-name').value = c ? (c.name || '') : '';
+  $('dir-company').value = c ? (c.company || '') : '';
+  $('dir-phone').value = c ? (c.phone || '') : '';
+  $('dir-email').value = c ? (c.email || '') : '';
+  $('dir-err').textContent = '';
+  $('dir-delete-btn').style.display = c ? '' : 'none';
+  $('dir-modal').classList.remove('hidden');
+}
+$('dir-cancel').addEventListener('click', () => $('dir-modal').classList.add('hidden'));
+
+$('dir-save').addEventListener('click', async () => {
+  const payload = {
+    role: $('dir-role').value,
+    name: $('dir-name').value.trim() || null,
+    company: $('dir-company').value.trim() || null,
+    phone: $('dir-phone').value.trim() || null,
+    email: $('dir-email').value.trim() || null,
+  };
+  $('dir-save').disabled = true;
+  let error;
+  if (editingDirId) {
+    ({ error } = await db.from('directory_contacts').update(payload).eq('id', editingDirId));
+  } else {
+    ({ error } = await db.from('directory_contacts').insert(payload));
+  }
+  $('dir-save').disabled = false;
+  if (error) { $('dir-err').textContent = error.message; return; }
+  $('dir-modal').classList.add('hidden');
+  await loadDirectory();
+  renderDirectoryList();
+});
+
+$('dir-delete-btn').addEventListener('click', async () => {
+  if (!editingDirId) return;
+  if (!confirm('Remove this directory contact?')) return;
+  await db.from('directory_contacts').delete().eq('id', editingDirId);
+  $('dir-modal').classList.add('hidden');
+  await loadDirectory();
+  renderDirectoryList();
+});
 
 async function saveKeyDate(column, value){
   await db.from('transactions').update({ [column]: value || null }).eq('id', currentTxnId);
@@ -928,6 +1314,11 @@ async function saveKeyDate(column, value){
   $('qs-opp-agent').value = t.opposing_agent ?? '';
   $('qs-bac').value = t.buyer_agent_commission ?? '';
   $('qs-agent-comm').value = t.agent_commission_note ?? '';
+  $('qs-client-phone').value = t.client_phone ?? '';
+  $('qs-client-email').value = t.client_email ?? '';
+
+  $('qs-client-phone').onchange = () => saveDealField('client_phone', $('qs-client-phone').value || null);
+  $('qs-client-email').onchange = () => saveDealField('client_email', $('qs-client-email').value || null);
 
   $('qs-list-price').onchange = () => saveDealField('list_price', numOrNull($('qs-list-price').value));
   $('qs-sale-price').onchange = () => saveDealField('sale_price', numOrNull($('qs-sale-price').value));
