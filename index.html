@@ -119,6 +119,20 @@
     border-radius:20px; padding:3px 9px; margin-left:6px;
   }
 
+  .template-row{ padding:10px 0; border-top:1px solid var(--border); }
+  .template-row:first-of-type{ border-top:none; }
+  .template-controls{ display:flex; gap:6px; flex-wrap:wrap; align-items:center; margin-top:6px; }
+  .template-controls select, .template-controls input{ font-size:13px; padding:5px 8px; width:auto; }
+  .template-offset-label{ font-size:12px; color:var(--text-muted); }
+
+  .closing-card{
+    display:flex; align-items:center; gap:12px; background:var(--surface);
+    border:1px solid var(--border); border-left:4px solid var(--accent);
+    border-radius:10px; padding:11px 14px; margin-bottom:8px; cursor:pointer;
+  }
+  .closing-card-date{ font-family:'Fraunces',serif; font-weight:700; font-size:15px; color:var(--accent-dark); white-space:nowrap; }
+  .closing-card-addr{ font-size:15px; font-weight:600; flex:1; min-width:0; }
+
   #view-as-row{
     display:flex; align-items:center; gap:8px; background:var(--surface); border:1px solid var(--border);
     border-radius:10px; padding:10px 12px; margin-bottom:14px;
@@ -131,6 +145,27 @@
   }
   .mt-group-title.overdue{ color:var(--danger); }
   .mt-group-title.flagged-title{ color:var(--warning); }
+  .mt-group-title.waiting-title{ color:var(--text-muted); }
+
+  .waiting-chip{
+    display:inline-block; font-size:13px; color:#8a6d1f; background:var(--warning-bg);
+    border-radius:6px; padding:3px 9px; margin:4px 0 2px;
+  }
+  .task-row.waiting{ background:#fdfaf2; }
+
+  .mt-row{ flex-wrap:wrap; }
+  .mt-actions{ display:flex; gap:4px; }
+  .mt-action-btn{
+    background:none; border:1px solid var(--border); border-radius:6px; cursor:pointer;
+    font-size:14px; padding:3px 8px;
+  }
+  .snooze-options{
+    width:100%; display:flex; gap:6px; margin-top:8px;
+  }
+  .snooze-opt{
+    flex:1; padding:7px 0; border:1px solid var(--border); border-radius:8px; background:var(--bg);
+    font-size:13px; font-weight:600; cursor:pointer; font-family:inherit; color:var(--accent-dark);
+  }
   .mt-group-title.today{ color:var(--warning); }
   .mt-row{
     background:var(--surface); border:1px solid var(--border); border-radius:10px;
@@ -445,6 +480,7 @@
     </div>
     <div class="user">
       <div class="who" id="who-label"></div>
+      <button class="linklike hidden" id="checklists-btn">Checklists</button>
       <button class="linklike" id="change-pw-btn">Change password</button>
       <button class="linklike" id="signout-btn">Sign out</button>
     </div>
@@ -462,6 +498,19 @@
       <input type="text" id="dir-search" class="search-input" placeholder="Search directory..." />
       <div id="directory-list"></div>
       <button class="fab" id="new-dir-fab">+</button>
+    </div>
+
+    <!-- TEMPLATE EDITOR VIEW -->
+    <div id="template-view" class="hidden">
+      <button class="back-btn" id="template-back-btn">&larr; Back</button>
+      <div class="list-header"><h1>Checklist Templates</h1></div>
+      <p class="key-dates-hint">Edits here change the master checklist used when a <strong>new</strong> transaction is created. Existing transactions keep their current tasks.</p>
+      <select id="template-side" class="status-select" style="margin-bottom:14px;">
+        <option value="seller">Selling side</option>
+        <option value="buyer">Buying side</option>
+        <option value="dual_extra">Dual-agent extras</option>
+      </select>
+      <div id="template-container"></div>
     </div>
 
     <!-- LIST VIEW -->
@@ -486,6 +535,7 @@
         <label>Viewing tasks for:</label>
         <select id="view-as-select"></select>
       </div>
+      <div id="closing-strip"></div>
       <div id="my-tasks-container"></div>
       <div id="my-tasks-empty" class="empty-state hidden">Nothing on your plate — all caught up! 🎉</div>
     </div>
@@ -518,7 +568,10 @@
       </div>
 
       <div class="qs-card">
-        <div class="qs-title">Quick Status</div>
+        <div class="qs-title-row">
+          <div class="qs-title">Quick Status</div>
+          <button class="secondary small" id="draft-update-btn">Draft Client Update</button>
+        </div>
         <div class="qs-grid">
           <div class="qs-field"><label>List Price</label><input type="text" id="qs-list-price" inputmode="decimal" placeholder="$" /></div>
           <div class="qs-field"><label>Sale Price</label><input type="text" id="qs-sale-price" inputmode="decimal" placeholder="$" /></div>
@@ -907,6 +960,9 @@ async function enterApp(){
     sel.value = currentMember.id;
     sel.onchange = () => { viewingAsId = sel.value === currentMember.id ? null : sel.value; loadMyTasks(); };
   }
+  if (currentMember.role === 'agent') {
+    $('checklists-btn').classList.remove('hidden');
+  }
 
   showMyTasks();
   loadTransactions(); // pre-load transaction list + badge data in the background
@@ -937,6 +993,7 @@ async function showMyTasks(){
   $('list-view').classList.add('hidden');
   $('detail-view').classList.add('hidden');
   $('directory-view').classList.add('hidden');
+  $('template-view').classList.add('hidden');
   $('main-tabs').classList.remove('hidden');
   $('my-tasks-view').classList.remove('hidden');
   setTab('mine');
@@ -946,8 +1003,10 @@ async function showMyTasks(){
 async function loadMyTasks(){
   // Active transactions only
   const { data: activeTxns } = await db.from('transactions')
-    .select('id, property_address, status')
+    .select('id, property_address, status, closing_date')
     .not('status', 'in', '(closed,cancelled)');
+
+  renderClosingStrip(activeTxns || []);
 
   const txnIds = (activeTxns || []).map(t => t.id);
   const txnById = Object.fromEntries((activeTxns || []).map(t => [t.id, t]));
@@ -965,10 +1024,10 @@ async function loadMyTasks(){
     .in('transaction_id', txnIds);
 
   const mine = (allTasks || []).filter(t =>
-    t.assignee_id === (viewingAsId || currentMember.id) && t.status === 'open'
+    t.assignee_id === (viewingAsId || currentMember.id) && t.status !== 'done'
   );
 
-  // Badge always reflects the logged-in person's own tasks, regardless of who's being viewed
+  // Badge always reflects the logged-in person's own actionable (open) tasks
   const myOwn = (allTasks || []).filter(t => t.assignee_id === currentMember.id && t.status === 'open');
   const todayForBadge = new Date(); todayForBadge.setHours(0,0,0,0);
   const ownBadgeCount = myOwn.filter(t => t.flagged || (t.due_date && new Date(t.due_date+'T00:00:00') <= todayForBadge)).length;
@@ -977,9 +1036,10 @@ async function loadMyTasks(){
   badgeEl.classList.toggle('hidden', ownBadgeCount === 0);
 
   const today = new Date(); today.setHours(0,0,0,0);
-  const groups = { flagged: [], overdue: [], today: [], soon: [], later: [], nodate: [] };
+  const groups = { flagged: [], overdue: [], today: [], soon: [], later: [], nodate: [], waiting: [] };
 
   mine.forEach(t => {
+    if (t.status === 'waiting') { groups.waiting.push(t); return; }
     if (t.flagged) { groups.flagged.push(t); return; }
     if (!t.due_date) { groups.nodate.push(t); return; }
     const due = new Date(t.due_date + 'T00:00:00');
@@ -1002,7 +1062,8 @@ async function loadMyTasks(){
     ['today', 'Due Today', 'today'],
     ['soon', 'Next 2 Days', ''],
     ['later', 'Upcoming', ''],
-    ['nodate', 'No Due Date', '']
+    ['nodate', 'No Due Date', ''],
+    ['waiting', 'Waiting on Others', 'waiting-title']
   ];
 
   let total = 0;
@@ -1027,9 +1088,7 @@ async function loadMyTasks(){
       checkbox.addEventListener('click', async (e) => {
         e.stopPropagation();
         if (!confirm(`Mark this complete?\n\n"${task.task_text}"`)) return;
-        await db.from('transaction_tasks').update({
-          status:'done', completed_by: currentMember.id, completed_at: new Date().toISOString()
-        }).eq('id', task.id);
+        await completeTask(task);
         await loadMyTasks();
       });
 
@@ -1038,8 +1097,56 @@ async function loadMyTasks(){
       body.innerHTML = `
         <div class="mt-text">${escapeHtml(task.task_text)}</div>
         <div class="mt-sub">${escapeHtml(txn ? txn.property_address : '')} · ${escapeHtml(task.phase_name)}</div>
+        ${task.status === 'waiting' ? `<div class="waiting-chip">⏸ Waiting${task.waiting_reason ? ': ' + escapeHtml(task.waiting_reason) : ''}</div>` : ''}
       `;
       body.addEventListener('click', () => openTransaction(task.transaction_id, task.id));
+
+      const actions = document.createElement('div');
+      actions.className = 'mt-actions';
+
+      const snoozeBtn = document.createElement('button');
+      snoozeBtn.className = 'mt-action-btn';
+      snoozeBtn.textContent = '⏰';
+      snoozeBtn.title = 'Snooze this task';
+      snoozeBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        const existing = row.querySelector('.snooze-options');
+        if (existing) { existing.remove(); return; }
+        const opts = document.createElement('div');
+        opts.className = 'snooze-options';
+        [['Tomorrow',1],['+3 days',3],['Next week',7]].forEach(([label, days]) => {
+          const b = document.createElement('button');
+          b.className = 'snooze-opt';
+          b.textContent = label;
+          b.addEventListener('click', async (ev) => {
+            ev.stopPropagation();
+            const d = new Date(); d.setDate(d.getDate() + days);
+            await db.from('transaction_tasks').update({ due_date: d.toISOString().slice(0,10) }).eq('id', task.id);
+            await loadMyTasks();
+          });
+          opts.appendChild(b);
+        });
+        row.appendChild(opts);
+      });
+
+      const waitActBtn = document.createElement('button');
+      waitActBtn.className = 'mt-action-btn';
+      waitActBtn.textContent = task.status === 'waiting' ? '▶' : '⏸';
+      waitActBtn.title = task.status === 'waiting' ? 'Resume this task' : 'Mark as waiting on someone else';
+      waitActBtn.addEventListener('click', async (e) => {
+        e.stopPropagation();
+        if (task.status === 'waiting') {
+          await db.from('transaction_tasks').update({ status:'open', waiting_reason:null }).eq('id', task.id);
+        } else {
+          const reason = prompt('What is this waiting on? (e.g. "lender", "title company callback")');
+          if (reason === null) return;
+          await db.from('transaction_tasks').update({ status:'waiting', waiting_reason: reason.trim() || null }).eq('id', task.id);
+        }
+        await loadMyTasks();
+      });
+
+      actions.appendChild(snoozeBtn);
+      actions.appendChild(waitActBtn);
 
       const due = document.createElement('div');
       due.className = 'mt-due ' + (key === 'overdue' ? 'overdue' : key === 'today' ? 'today' : '');
@@ -1048,11 +1155,43 @@ async function loadMyTasks(){
       row.appendChild(checkbox);
       row.appendChild(body);
       row.appendChild(due);
+      row.appendChild(actions);
       container.appendChild(row);
     });
   });
 
   $('my-tasks-empty').classList.toggle('hidden', total > 0);
+}
+
+function renderClosingStrip(txns){
+  const strip = $('closing-strip');
+  const today = new Date(); today.setHours(0,0,0,0);
+  const week = new Date(today.getTime() + 7*86400000);
+  const closing = txns
+    .filter(t => t.closing_date &&
+      new Date(t.closing_date+'T00:00:00') >= today &&
+      new Date(t.closing_date+'T00:00:00') <= week)
+    .sort((a,b) => a.closing_date.localeCompare(b.closing_date));
+
+  strip.innerHTML = '';
+  if (closing.length === 0) return;
+
+  const title = document.createElement('div');
+  title.className = 'mt-group-title';
+  title.style.marginTop = '0';
+  title.textContent = '🏠 Closing This Week';
+  strip.appendChild(title);
+
+  closing.forEach(t => {
+    const card = document.createElement('div');
+    card.className = 'closing-card';
+    card.innerHTML = `
+      <div class="closing-card-date">${formatShortDate(t.closing_date)}</div>
+      <div class="closing-card-addr">${escapeHtml(t.property_address)}</div>
+    `;
+    card.addEventListener('click', () => openTransaction(t.id));
+    strip.appendChild(card);
+  });
 }
 
 function formatShortDate(dateStr){
@@ -1066,6 +1205,7 @@ async function showList(){
   $('detail-view').classList.add('hidden');
   $('my-tasks-view').classList.add('hidden');
   $('directory-view').classList.add('hidden');
+  $('template-view').classList.add('hidden');
   $('main-tabs').classList.remove('hidden');
   $('list-view').classList.remove('hidden');
   setTab('txns');
@@ -1207,6 +1347,7 @@ async function openTransaction(id, focusTaskId){
   $('list-view').classList.add('hidden');
   $('my-tasks-view').classList.add('hidden');
   $('directory-view').classList.add('hidden');
+  $('template-view').classList.add('hidden');
   $('main-tabs').classList.add('hidden');
   $('detail-view').classList.remove('hidden');
 
@@ -1276,6 +1417,44 @@ async function openTransaction(id, focusTaskId){
 
   if (focusTaskId) focusOnTask(focusTaskId);
 }
+
+$('draft-update-btn').addEventListener('click', () => {
+  const t = currentTxn;
+  const today = new Date(); today.setHours(0,0,0,0);
+  const weekAgo = new Date(today.getTime() - 7*86400000);
+  const weekOut = new Date(today.getTime() + 7*86400000);
+
+  const doneThisWeek = currentTasks.filter(x => x.status === 'done' && x.completed_at && new Date(x.completed_at) >= weekAgo);
+  const comingUp = currentTasks.filter(x => x.status === 'open' && x.due_date &&
+    new Date(x.due_date+'T00:00:00') >= today && new Date(x.due_date+'T00:00:00') <= weekOut);
+
+  const firstNames = clientsCache.map(c => (c.name || '').split(' ')[0]).filter(Boolean);
+  const greeting = firstNames.length ? `Hi ${firstNames.join(' and ')},` : 'Hi,';
+
+  let body = `${greeting}\n\nHere's your update on ${t.property_address}:\n\n`;
+  if (t.listing_date) {
+    const dom = Math.max(0, Math.round((today - new Date(t.listing_date+'T00:00:00'))/86400000));
+    body += `Days on market: ${dom}\n`;
+  }
+  if (t.contract_date) body += `Under contract since: ${t.contract_date}\n`;
+  if (t.closing_date) body += `Scheduled closing: ${t.closing_date}\n`;
+  body += `\n`;
+  if (doneThisWeek.length) {
+    body += `Completed this week:\n`;
+    doneThisWeek.forEach(x => body += `  - ${x.task_text}\n`);
+    body += `\n`;
+  }
+  if (comingUp.length) {
+    body += `Coming up next:\n`;
+    comingUp.forEach(x => body += `  - ${x.task_text}${x.due_date ? ' (' + x.due_date + ')' : ''}\n`);
+    body += `\n`;
+  }
+  body += `Please reach out with any questions at all.\n\nBest,\n${currentMember.name}`;
+
+  const to = clientsCache.map(c => c.email).filter(Boolean).join(',');
+  const subject = `Update on ${t.property_address}`;
+  window.location.href = `mailto:${to}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
+});
 
 // ---------------- CLIENTS ----------------
 let clientsCache = [];
@@ -1534,6 +1713,7 @@ async function showDirectory(){
   $('list-view').classList.add('hidden');
   $('my-tasks-view').classList.add('hidden');
   $('detail-view').classList.add('hidden');
+  $('template-view').classList.add('hidden');
   $('directory-view').classList.remove('hidden');
   await loadDirectory();
   renderDirectoryList();
@@ -1792,7 +1972,7 @@ function renderPhases(){
 
 function renderTaskRow(task, isLocked){
   const row = document.createElement('div');
-  row.className = 'task-row' + (task.status === 'done' ? ' done' : '') + (task.flagged ? ' flagged' : '');
+  row.className = 'task-row' + (task.status === 'done' ? ' done' : '') + (task.flagged ? ' flagged' : '') + (task.status === 'waiting' ? ' waiting' : '');
   row.dataset.taskId = task.id;
 
   const flagBtn = document.createElement('button');
@@ -1876,6 +2056,23 @@ function renderTaskRow(task, isLocked){
   noteToggle.textContent = task.notes ? '📝 Note' : '+ Note';
   meta.appendChild(noteToggle);
 
+  const waitBtn = document.createElement('button');
+  waitBtn.className = 'note-toggle';
+  waitBtn.type = 'button';
+  waitBtn.textContent = task.status === 'waiting' ? '▶ Resume' : '⏸ Waiting';
+  waitBtn.title = task.status === 'waiting' ? 'Mark as no longer waiting' : 'Mark as waiting on someone else';
+  waitBtn.addEventListener('click', async () => {
+    if (task.status === 'waiting') {
+      await db.from('transaction_tasks').update({ status:'open', waiting_reason:null }).eq('id', task.id);
+    } else {
+      const reason = prompt('What is this waiting on? (e.g. "lender", "title company callback")');
+      if (reason === null) return; // cancelled
+      await db.from('transaction_tasks').update({ status:'waiting', waiting_reason: reason.trim() || null }).eq('id', task.id);
+    }
+    await loadTasks();
+  });
+  meta.appendChild(waitBtn);
+
   meta.appendChild(delBtn);
 
   const textRow = document.createElement('div');
@@ -1884,6 +2081,12 @@ function renderTaskRow(task, isLocked){
   textRow.appendChild(editBtn);
 
   body.appendChild(textRow);
+  if (task.status === 'waiting') {
+    const chip = document.createElement('div');
+    chip.className = 'waiting-chip';
+    chip.textContent = '⏸ Waiting' + (task.waiting_reason ? ': ' + task.waiting_reason : '');
+    body.appendChild(chip);
+  }
   body.appendChild(meta);
 
   if (task.notes) {
@@ -1922,7 +2125,7 @@ function renderTaskRow(task, isLocked){
 
 function applyDueStyle(input, task){
   input.classList.remove('due-overdue','due-soon');
-  if (!task.due_date || task.status === 'done') return;
+  if (!task.due_date || task.status !== 'open') return;
   const today = new Date(); today.setHours(0,0,0,0);
   const due = new Date(task.due_date + 'T00:00:00');
   const diffDays = Math.round((due - today) / 86400000);
@@ -1930,15 +2133,39 @@ function applyDueStyle(input, task){
   else if (diffDays <= 2) input.classList.add('due-soon');
 }
 
+async function completeTask(task){
+  await db.from('transaction_tasks').update({
+    status:'done', completed_by: currentMember.id, completed_at: new Date().toISOString()
+  }).eq('id', task.id);
+
+  // Recurring tasks (e.g. weekly seller update) spawn their next occurrence
+  if (task.recurring_days) {
+    const txn = (currentTxn && currentTxn.id === task.transaction_id) ? currentTxn : txnCache.find(t => t.id === task.transaction_id);
+    const txnStatus = txn ? txn.status : null;
+    if (txnStatus !== 'closed' && txnStatus !== 'cancelled') {
+      const d = new Date(); d.setDate(d.getDate() + task.recurring_days);
+      await db.from('transaction_tasks').insert({
+        transaction_id: task.transaction_id,
+        phase_number: task.phase_number,
+        phase_name: task.phase_name,
+        task_text: task.task_text,
+        sort_order: task.sort_order,
+        assignee_id: task.assignee_id,
+        due_date: d.toISOString().slice(0,10),
+        recurring_days: task.recurring_days
+      });
+    }
+  }
+}
+
 async function toggleTask(task){
   const isDone = task.status === 'done';
   if (!isDone) {
     if (!confirm(`Mark this complete?\n\n"${task.task_text}"`)) return;
+    await completeTask(task);
+  } else {
+    await db.from('transaction_tasks').update({ status:'open', completed_by:null, completed_at:null }).eq('id', task.id);
   }
-  const update = isDone
-    ? { status:'open', completed_by:null, completed_at:null }
-    : { status:'done', completed_by: currentMember.id, completed_at: new Date().toISOString() };
-  await db.from('transaction_tasks').update(update).eq('id', task.id);
   await loadTasks();
 }
 
@@ -2095,6 +2322,145 @@ $('edit-task-save').addEventListener('click', async () => {
   renderQuickStatus();
   renderActivityFeed();
 });
+
+// ---------------- TEMPLATE EDITOR ----------------
+let templateCache = [];
+const ROLE_OPTIONS = [['','No default assignee'],['agent','Agent'],['assistant','Assistant'],['coordinator','Coordinator']];
+const ANCHOR_OPTIONS = [['','No auto date'],['creation','From created date'],['listing','From listing date'],['contract','From contract date'],['closing','From closing date']];
+
+$('checklists-btn').addEventListener('click', showTemplateEditor);
+$('template-back-btn').addEventListener('click', showMyTasks);
+$('template-side').addEventListener('change', loadTemplateEditor);
+
+async function showTemplateEditor(){
+  currentTxnId = null;
+  $('list-view').classList.add('hidden');
+  $('my-tasks-view').classList.add('hidden');
+  $('detail-view').classList.add('hidden');
+  $('directory-view').classList.add('hidden');
+  $('main-tabs').classList.add('hidden');
+  $('template-view').classList.remove('hidden');
+  await loadTemplateEditor();
+}
+
+async function loadTemplateEditor(){
+  const side = $('template-side').value;
+  const { data } = await db.from('template_tasks').select('*').eq('side', side).order('phase_number').order('sort_order');
+  templateCache = data || [];
+  renderTemplateEditor();
+}
+
+function renderTemplateEditor(){
+  const container = $('template-container');
+  container.innerHTML = '';
+
+  const phaseMap = new Map();
+  templateCache.forEach(t => { if (!phaseMap.has(t.phase_number)) phaseMap.set(t.phase_number, t.phase_name); });
+
+  [...phaseMap.entries()].sort((a,b) => a[0]-b[0]).forEach(([num, name]) => {
+    const card = document.createElement('div');
+    card.className = 'qs-card';
+    card.innerHTML = `<div class="qs-title">${num}. ${escapeHtml(name)}</div>`;
+
+    templateCache.filter(t => t.phase_number === num).forEach(t => {
+      card.appendChild(renderTemplateRow(t));
+    });
+
+    const addBtn = document.createElement('button');
+    addBtn.className = 'secondary';
+    addBtn.style.width = '100%';
+    addBtn.style.marginTop = '8px';
+    addBtn.textContent = '+ Add task to this phase';
+    addBtn.addEventListener('click', async () => {
+      const text = prompt('New task:');
+      if (!text || !text.trim()) return;
+      const phaseSorts = templateCache.filter(x => x.phase_number === num).map(x => x.sort_order);
+      const maxSort = phaseSorts.length ? Math.max(...phaseSorts) : 0;
+      await db.from('template_tasks').insert({
+        side: $('template-side').value, phase_number: num, phase_name: name,
+        task_text: text.trim(), sort_order: maxSort + 1, offset_days: 0
+      });
+      await loadTemplateEditor();
+    });
+    card.appendChild(addBtn);
+    container.appendChild(card);
+  });
+}
+
+function renderTemplateRow(t){
+  const row = document.createElement('div');
+  row.className = 'template-row';
+
+  const text = document.createElement('div');
+  text.className = 'task-text';
+  text.style.flex = '1';
+  text.textContent = t.task_text;
+
+  const editBtn = document.createElement('button');
+  editBtn.className = 'edit-task-btn';
+  editBtn.textContent = '✎';
+  editBtn.title = 'Edit task wording';
+  editBtn.addEventListener('click', async () => {
+    const v = prompt('Edit task wording:', t.task_text);
+    if (v === null || !v.trim()) return;
+    await db.from('template_tasks').update({ task_text: v.trim() }).eq('id', t.id);
+    t.task_text = v.trim();
+    text.textContent = v.trim();
+  });
+
+  const delBtn = document.createElement('button');
+  delBtn.className = 'del-btn';
+  delBtn.textContent = '✕';
+  delBtn.title = 'Remove from template';
+  delBtn.addEventListener('click', async () => {
+    if (!confirm(`Remove "${t.task_text}" from the template?`)) return;
+    await db.from('template_tasks').delete().eq('id', t.id);
+    await loadTemplateEditor();
+  });
+
+  const textRow = document.createElement('div');
+  textRow.className = 'task-text-row';
+  textRow.appendChild(text);
+  textRow.appendChild(editBtn);
+  textRow.appendChild(delBtn);
+
+  const controls = document.createElement('div');
+  controls.className = 'template-controls';
+
+  const roleSel = document.createElement('select');
+  roleSel.innerHTML = ROLE_OPTIONS.map(([v,l]) => `<option value="${v}" ${(t.default_role||'')===v?'selected':''}>${l}</option>`).join('');
+  roleSel.onchange = async () => {
+    await db.from('template_tasks').update({ default_role: roleSel.value || null }).eq('id', t.id);
+  };
+
+  const anchorSel = document.createElement('select');
+  anchorSel.innerHTML = ANCHOR_OPTIONS.map(([v,l]) => `<option value="${v}" ${(t.anchor_type||'')===v?'selected':''}>${l}</option>`).join('');
+  anchorSel.onchange = async () => {
+    await db.from('template_tasks').update({ anchor_type: anchorSel.value || null }).eq('id', t.id);
+  };
+
+  const offsetInput = document.createElement('input');
+  offsetInput.type = 'number';
+  offsetInput.value = t.offset_days ?? 0;
+  offsetInput.title = 'Days before (-) or after (+) the anchor date';
+  offsetInput.style.width = '80px';
+  offsetInput.onchange = async () => {
+    await db.from('template_tasks').update({ offset_days: parseInt(offsetInput.value) || 0 }).eq('id', t.id);
+  };
+
+  const offsetLabel = document.createElement('span');
+  offsetLabel.className = 'template-offset-label';
+  offsetLabel.textContent = 'days';
+
+  controls.appendChild(roleSel);
+  controls.appendChild(anchorSel);
+  controls.appendChild(offsetInput);
+  controls.appendChild(offsetLabel);
+
+  row.appendChild(textRow);
+  row.appendChild(controls);
+  return row;
+}
 
 function escapeHtml(str){
   if (!str) return '';
