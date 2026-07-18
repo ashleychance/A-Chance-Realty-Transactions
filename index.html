@@ -1359,7 +1359,13 @@ async function openTransaction(id, focusTaskId){
   const sel = $('detail-status');
   sel.innerHTML = STATUSES.map(s => `<option value="${s[0]}" ${s[0]===t.status?'selected':''}>${s[1]}</option>`).join('');
   sel.onchange = async () => {
-    await db.from('transactions').update({ status: sel.value }).eq('id', id);
+    const oldStatus = t.status;
+    const newStatus = sel.value;
+    await db.from('transactions').update({ status: newStatus }).eq('id', id);
+    t.status = newStatus;
+    if (oldStatus !== newStatus && (newStatus === 'under_contract' || newStatus === 'closed')) {
+      sendClientMilestoneEmail(newStatus, id, t.property_address);
+    }
   };
 
   // Buyer-side deals have no listing date
@@ -2133,6 +2139,27 @@ function applyDueStyle(input, task){
   else if (diffDays <= 2) input.classList.add('due-soon');
 }
 
+async function sendClientMilestoneEmail(type, transactionId, propertyAddress){
+  try {
+    const { data: clients } = await db.from('transaction_clients').select('name,email').eq('transaction_id', transactionId);
+    const emails = (clients || []).map(c => c.email).filter(Boolean);
+    if (emails.length === 0) return;
+    await fetch(`${SUPABASE_URL}/functions/v1/client-email`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'apikey': SUPABASE_ANON_KEY, 'Authorization': `Bearer ${SUPABASE_ANON_KEY}` },
+      body: JSON.stringify({
+        type,
+        client_emails: emails,
+        client_names: (clients || []).map(c => c.name),
+        property_address: propertyAddress,
+        agent_name: currentMember.name
+      })
+    });
+  } catch (e) {
+    console.error('Client milestone email failed (non-blocking):', e);
+  }
+}
+
 async function completeTask(task){
   await db.from('transaction_tasks').update({
     status:'done', completed_by: currentMember.id, completed_at: new Date().toISOString()
@@ -2155,6 +2182,18 @@ async function completeTask(task){
         recurring_days: task.recurring_days
       });
     }
+  }
+
+  // Specific tasks trigger a client-facing milestone email — the
+  // act of checking these off IS the approval, so it fires right away
+  const MILESTONE_TASK_MAP = {
+    'Notify seller listing is live': 'go_live',
+    'Deliver keys, garage remotes, codes to buyer': 'buyer_welcome'
+  };
+  if (MILESTONE_TASK_MAP[task.task_text]) {
+    const txn = (currentTxn && currentTxn.id === task.transaction_id) ? currentTxn : txnCache.find(t => t.id === task.transaction_id);
+    const address = txn ? txn.property_address : (await db.from('transactions').select('property_address').eq('id', task.transaction_id).single()).data?.property_address;
+    sendClientMilestoneEmail(MILESTONE_TASK_MAP[task.task_text], task.transaction_id, address);
   }
 }
 
