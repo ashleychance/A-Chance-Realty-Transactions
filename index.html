@@ -1455,7 +1455,7 @@ $('draft-update-btn').addEventListener('click', () => {
     comingUp.forEach(x => body += `  - ${x.task_text}${x.due_date ? ' (' + x.due_date + ')' : ''}\n`);
     body += `\n`;
   }
-  body += `Please reach out with any questions at all.\n\nBest,\n${currentMember.name}`;
+  body += `Please reach out with any questions at all.\n\nBest,\n${currentMember.name}\n318-272-6763\nAshley.chance@allyrealestate.com\n\nBerkshire Hathaway HomeServices Ally Real Estate\n700 Ogilvie Ste. D, Bossier City, LA 71111`;
 
   const to = clientsCache.map(c => c.email).filter(Boolean).join(',');
   const subject = `Update on ${t.property_address}`;
