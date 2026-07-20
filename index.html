@@ -247,6 +247,7 @@
   .key-date-field{ flex:1; min-width:110px; }
   .key-date-field label{ margin-bottom:3px; }
   .key-date-field input{ font-size:15px; padding:8px 10px; }
+  .add-cal-link{ display:block; font-size:13px; color:var(--accent-dark); margin-top:4px; text-decoration:none; }
   .key-dates-hint{ font-size:14px; color:var(--text-muted); margin:6px 0 18px; }
 
   .qs-card{
@@ -481,6 +482,7 @@
     <div class="user">
       <div class="who" id="who-label"></div>
       <button class="linklike hidden" id="checklists-btn">Checklists</button>
+      <button class="linklike" id="notif-prefs-btn">Notifications</button>
       <button class="linklike" id="change-pw-btn">Change password</button>
       <button class="linklike" id="signout-btn">Sign out</button>
     </div>
@@ -554,14 +556,17 @@
           <div class="key-date-field">
             <label>Listing (Go-Live) Date</label>
             <input type="date" id="key-listing-date" />
+            <a href="#" id="cal-listing" class="add-cal-link hidden" target="_blank">📅 Add to Calendar</a>
           </div>
           <div class="key-date-field">
             <label>Contract Date</label>
             <input type="date" id="key-contract-date" />
+            <a href="#" id="cal-contract" class="add-cal-link hidden" target="_blank">📅 Add to Calendar</a>
           </div>
           <div class="key-date-field">
             <label>Closing Date</label>
             <input type="date" id="key-closing-date" />
+            <a href="#" id="cal-closing" class="add-cal-link hidden" target="_blank">📅 Add to Calendar</a>
           </div>
         </div>
         <p class="key-dates-hint">Setting these auto-fills due dates for every task tied to them — no need to set dates one by one.</p>
@@ -828,6 +833,21 @@
   </div>
 </div>
 
+<!-- NOTIFICATION PREFERENCES MODAL -->
+<div id="notif-prefs-modal" class="modal-backdrop hidden">
+  <div class="modal">
+    <h2>Notification Preferences</h2>
+    <p class="key-dates-hint" style="margin-top:0;">These only affect emails to you. They don't change what clients receive.</p>
+    <label class="checkbox-label"><input type="checkbox" id="pref-digest" /> Daily task digest email (7 AM)</label>
+    <label class="checkbox-label"><input type="checkbox" id="pref-pings" /> Instant email when someone flags or assigns you a task</label>
+    <div class="err" id="notif-prefs-err"></div>
+    <div class="modal-actions">
+      <button class="secondary" id="notif-prefs-cancel">Cancel</button>
+      <button class="primary" id="notif-prefs-save">Save</button>
+    </div>
+  </div>
+</div>
+
 <script>
 const SUPABASE_URL = "https://nmttottwzbxumsmqligf.supabase.co";
 const SUPABASE_ANON_KEY = "sb_publishable_e-ch_oh_LNB0kHR5X09rvQ_HQdueOsL";
@@ -909,6 +929,27 @@ $('login-btn').addEventListener('click', async () => {
 $('signout-btn').addEventListener('click', async () => {
   await sbRoot.auth.signOut();
   location.reload();
+});
+
+$('notif-prefs-btn').addEventListener('click', () => {
+  $('pref-digest').checked = currentMember.email_digest_enabled !== false;
+  $('pref-pings').checked = currentMember.task_pings_enabled !== false;
+  $('notif-prefs-err').textContent = '';
+  $('notif-prefs-modal').classList.remove('hidden');
+});
+$('notif-prefs-cancel').addEventListener('click', () => $('notif-prefs-modal').classList.add('hidden'));
+
+$('notif-prefs-save').addEventListener('click', async () => {
+  $('notif-prefs-save').disabled = true;
+  const { error } = await db.from('team_members').update({
+    email_digest_enabled: $('pref-digest').checked,
+    task_pings_enabled: $('pref-pings').checked
+  }).eq('id', currentMember.id);
+  $('notif-prefs-save').disabled = false;
+  if (error) { $('notif-prefs-err').textContent = error.message; return; }
+  currentMember.email_digest_enabled = $('pref-digest').checked;
+  currentMember.task_pings_enabled = $('pref-pings').checked;
+  $('notif-prefs-modal').classList.add('hidden');
 });
 
 $('change-pw-btn').addEventListener('click', () => {
@@ -1379,6 +1420,8 @@ async function openTransaction(id, focusTaskId){
   $('key-contract-date').onchange = () => saveKeyDate('contract_date', $('key-contract-date').value);
   $('key-closing-date').onchange = () => saveKeyDate('closing_date', $('key-closing-date').value);
 
+  refreshAllCalendarLinks();
+
   $('qs-list-price').value = t.list_price ?? '';
   $('qs-sale-price').value = t.sale_price ?? '';
   $('qs-opp-agent').value = t.opposing_agent ?? '';
@@ -1455,7 +1498,7 @@ $('draft-update-btn').addEventListener('click', () => {
     comingUp.forEach(x => body += `  - ${x.task_text}${x.due_date ? ' (' + x.due_date + ')' : ''}\n`);
     body += `\n`;
   }
-  body += `Please reach out with any questions at all.\n\nBest,\n${currentMember.name}\n318-272-6763\nAshley.chance@allyrealestate.com\n\nBerkshire Hathaway HomeServices Ally Real Estate\n700 Ogilvie Ste. D, Bossier City, LA 71111`;
+  body += `Please reach out with any questions at all.\n\nBest,\nAshley Chance, REALTOR® — 318-272-6763 — Ashley.chance@allyrealestate.com\nDawn Wallace, Transaction Coordinator — (214) 886-1041 — dawn.wallace@allyrealestate.com\n\nBerkshire Hathaway HomeServices Ally Real Estate\n700 Ogilvie Ste. D, Bossier City, LA 71111`;
 
   const to = clientsCache.map(c => c.email).filter(Boolean).join(',');
   const subject = `Update on ${t.property_address}`;
@@ -1803,10 +1846,39 @@ $('dir-delete-btn').addEventListener('click', async () => {
   renderDirectoryList();
 });
 
+function updateCalendarLink(linkId, dateVal, title){
+  const el = $(linkId);
+  if (!dateVal) { el.classList.add('hidden'); return; }
+  el.classList.remove('hidden');
+
+  const d = new Date(dateVal + 'T00:00:00');
+  const next = new Date(d.getTime() + 86400000);
+  const fmt = (x) => x.toISOString().slice(0,10).replace(/-/g,'');
+  const guests = teamMembers.filter(m => m.id !== currentMember.id).map(m => m.email).filter(Boolean).join(',');
+
+  const params = new URLSearchParams({
+    action: 'TEMPLATE',
+    text: title,
+    dates: `${fmt(d)}/${fmt(next)}`,
+    details: `From the A Chance Realty Transaction Tracker — ${currentTxn ? currentTxn.property_address : ''}`,
+  });
+  let url = `https://calendar.google.com/calendar/render?${params.toString()}`;
+  if (guests) url += `&add=${encodeURIComponent(guests)}`;
+  el.href = url;
+}
+
+function refreshAllCalendarLinks(){
+  const addr = currentTxn ? currentTxn.property_address : '';
+  updateCalendarLink('cal-listing', $('key-listing-date').value, `Go-Live: ${addr}`);
+  updateCalendarLink('cal-contract', $('key-contract-date').value, `Contract Date: ${addr}`);
+  updateCalendarLink('cal-closing', $('key-closing-date').value, `Closing: ${addr}`);
+}
+
 async function saveKeyDate(column, value){
   await db.from('transactions').update({ [column]: value || null }).eq('id', currentTxnId);
   await db.rpc('recalc_transaction_due_dates', { p_transaction_id: currentTxnId });
   await loadTasks();
+  refreshAllCalendarLinks();
 }
 
 function numOrNull(v){
@@ -2152,7 +2224,8 @@ async function sendClientMilestoneEmail(type, transactionId, propertyAddress){
         client_emails: emails,
         client_names: (clients || []).map(c => c.name),
         property_address: propertyAddress,
-        agent_name: currentMember.name
+        agent_name: currentMember.name,
+        transaction_id: transactionId
       })
     });
   } catch (e) {
@@ -2513,6 +2586,7 @@ async function notifyTaskEvent(action, task){
   if (!task.assignee_id || task.assignee_id === currentMember.id) return;
   const assignee = teamMembers.find(m => m.id === task.assignee_id);
   if (!assignee || !assignee.email) return;
+  if (assignee.task_pings_enabled === false) return; // they've turned these off
 
   const txn = txnCache.find(t => t.id === task.transaction_id) || currentTxn;
   const propertyAddress = txn ? txn.property_address : '';
