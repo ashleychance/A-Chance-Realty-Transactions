@@ -586,8 +586,14 @@
             <div id="opp-agent-suggestions" class="dir-suggest-box"></div>
           </div>
           <div class="qs-field"><label>BAC</label><input type="text" id="qs-bac" placeholder="e.g. 3%" /></div>
+          <div class="qs-field"><label>Bedrooms</label><input type="number" id="qs-bedrooms" min="0" /></div>
+          <div class="qs-field"><label>Bathrooms</label><input type="number" id="qs-bathrooms" min="0" step="0.5" /></div>
+          <div class="qs-field"><label>Sq Ft</label><input type="number" id="qs-sqft" min="0" /></div>
+          <div class="qs-field" style="grid-column:1/-1;"><label>Primary Photo URL</label><input type="text" id="qs-photo-url" placeholder="Paste a link to the main listing photo" /></div>
           <div class="qs-field" style="grid-column:1/-1;"><label>Agent Commission Note</label><input type="text" id="qs-agent-comm" /></div>
         </div>
+
+        <label class="checkbox-label"><input type="checkbox" id="qs-do-not-solicit" /> Do not solicit reviews for this client</label>
 
         <div class="clients-section">
           <div class="qs-title-row">
@@ -1407,6 +1413,14 @@ async function openTransaction(id, focusTaskId){
     if (oldStatus !== newStatus && (newStatus === 'under_contract' || newStatus === 'closed')) {
       sendClientMilestoneEmail(newStatus, id, t.property_address);
     }
+    // GBP post task for Dawn — separate from client emails, fires on
+    // active/under_contract/closed regardless of side
+    if (oldStatus !== newStatus) {
+      const GBP_STATUS_MAP = { active: 'new_listing', under_contract: 'under_contract', closed: 'just_sold' };
+      if (GBP_STATUS_MAP[newStatus]) {
+        createGbpTask(GBP_STATUS_MAP[newStatus], id, t.property_address, t);
+      }
+    }
   };
 
   // Buyer-side deals have no listing date
@@ -1427,8 +1441,21 @@ async function openTransaction(id, focusTaskId){
   $('qs-opp-agent').value = t.opposing_agent ?? '';
   $('qs-bac').value = t.buyer_agent_commission ?? '';
   $('qs-agent-comm').value = t.agent_commission_note ?? '';
+  $('qs-bedrooms').value = t.list_bedrooms ?? '';
+  $('qs-bathrooms').value = t.list_bathrooms ?? '';
+  $('qs-sqft').value = t.list_sqft ?? '';
+  $('qs-photo-url').value = t.primary_photo_url ?? '';
+  $('qs-do-not-solicit').checked = !!t.do_not_solicit;
 
-  $('qs-list-price').onchange = () => saveDealField('list_price', numOrNull($('qs-list-price').value));
+  $('qs-list-price').onchange = () => {
+    const newVal = numOrNull($('qs-list-price').value);
+    const oldVal = currentTxn.list_price;
+    saveDealField('list_price', newVal);
+    currentTxn.list_price = newVal;
+    if (currentTxn.status === 'active' && newVal !== oldVal && newVal !== null) {
+      createGbpTask('price_change', currentTxnId, currentTxn.property_address);
+    }
+  };
   $('qs-sale-price').onchange = () => saveDealField('sale_price', numOrNull($('qs-sale-price').value));
   $('qs-opp-agent').onchange = () => saveDealField('opposing_agent', $('qs-opp-agent').value || null);
 
@@ -1459,6 +1486,11 @@ async function openTransaction(id, focusTaskId){
   });
   $('qs-bac').onchange = () => saveDealField('buyer_agent_commission', $('qs-bac').value || null);
   $('qs-agent-comm').onchange = () => saveDealField('agent_commission_note', $('qs-agent-comm').value || null);
+  $('qs-bedrooms').onchange = () => saveDealField('list_bedrooms', $('qs-bedrooms').value ? parseInt($('qs-bedrooms').value) : null);
+  $('qs-bathrooms').onchange = () => saveDealField('list_bathrooms', $('qs-bathrooms').value ? parseFloat($('qs-bathrooms').value) : null);
+  $('qs-sqft').onchange = () => saveDealField('list_sqft', $('qs-sqft').value ? parseInt($('qs-sqft').value) : null);
+  $('qs-photo-url').onchange = () => saveDealField('primary_photo_url', $('qs-photo-url').value || null);
+  $('qs-do-not-solicit').onchange = () => saveDealField('do_not_solicit', $('qs-do-not-solicit').checked);
 
   await loadTasks();
   await loadContacts();
@@ -2211,6 +2243,87 @@ function applyDueStyle(input, task){
   else if (diffDays <= 2) input.classList.add('due-soon');
 }
 
+// ---------------- GBP POST TASKS (for Dawn) ----------------
+const GBP_PHASE_MAP = {
+  new_listing:     { num: 4, name: 'Go Live Day' },
+  price_change:    { num: 5, name: 'Ongoing Listing Management' },
+  under_contract:  { num: 6, name: 'Under Contract' },
+  just_sold:       { num: 8, name: 'Post-Closing' },
+  open_house:      { num: 4, name: 'Go Live Day' },
+};
+
+const GBP_EVENT_LABELS = {
+  new_listing: 'Just Listed',
+  price_change: 'Price Change',
+  under_contract: 'Under Contract',
+  just_sold: 'Just Sold',
+  open_house: 'Open House',
+};
+
+function cityFromAddress(address){
+  const parts = (address || '').split(',').map(s => s.trim());
+  return parts.length >= 2 ? parts[1] : address;
+}
+
+function formatMoney(n){
+  if (n === null || n === undefined || n === '') return '';
+  return '$' + Number(n).toLocaleString('en-US');
+}
+
+function buildGbpPostCopy(type, txn){
+  const address = txn.property_address || '[Address]';
+  const city = cityFromAddress(address);
+  const cityTag = (city || '').replace(/[^a-zA-Z]/g, '');
+  const bd = txn.list_bedrooms ?? '[BR]';
+  const ba = txn.list_bathrooms ?? '[BA]';
+  const sqft = txn.list_sqft ? Number(txn.list_sqft).toLocaleString('en-US') : '[SqFt]';
+  const price = formatMoney(txn.list_price) || '[Price]';
+
+  switch (type) {
+    case 'new_listing':
+      return `🏡 Just Listed! ${address} — ${bd}BR/${ba}BA, ${sqft} sq ft. [Add a one-line highlight]. Reach out to Ashley Chance for a private showing! #BossierCityRealEstate #${cityTag}Homes`;
+    case 'price_change':
+      return `📉 Price Improvement! ${address} is now listed at ${price}. Great opportunity in [neighborhood/area] — contact Ashley Chance to schedule a tour.`;
+    case 'under_contract':
+      return `🤝 Under Contract! Another one moving toward closing — ${address}. Thinking of buying or selling in the area? Ashley Chance is here to help.`;
+    case 'just_sold':
+      return `🎉 SOLD! Congratulations to our clients on the sale of ${address}. If you're considering buying or selling in Bossier City, Benton, or Shreveport, Ashley Chance would love to help you get results like this.`;
+    case 'open_house':
+      return `📅 Open House this [Day], [Date] from [Start]–[End] at ${address}. Come take a look! Questions before then? Reach out to Ashley Chance.`;
+    default:
+      return '';
+  }
+}
+
+async function createGbpTask(type, transactionId, propertyAddress, txnOverride){
+  const txn = txnOverride || currentTxn || {};
+  const dawn = teamMembers.find(m => m.role === 'assistant_coordinator')
+            || teamMembers.find(m => m.role === 'coordinator')
+            || teamMembers.find(m => m.role === 'assistant')
+            || null;
+
+  const copy = buildGbpPostCopy(type, { ...txn, property_address: propertyAddress });
+  const photoLine = txn.primary_photo_url
+    ? `Photo: ${txn.primary_photo_url}`
+    : `Photo: attach from camera roll / MLS`;
+
+  const notes = `Copy:\n${copy}\n\n${photoLine}\n\nPost here: https://business.google.com`;
+
+  const phase = GBP_PHASE_MAP[type];
+  const label = GBP_EVENT_LABELS[type];
+
+  await db.from('transaction_tasks').insert({
+    transaction_id: transactionId,
+    phase_number: phase.num,
+    phase_name: phase.name,
+    task_text: `Post to Google: ${propertyAddress} — ${label}`,
+    sort_order: 999,
+    assignee_id: dawn ? dawn.id : null,
+    due_date: new Date().toISOString().slice(0,10),
+    notes,
+  });
+}
+
 async function sendClientMilestoneEmail(type, transactionId, propertyAddress){
   try {
     const { data: clients } = await db.from('transaction_clients').select('name,email').eq('transaction_id', transactionId);
@@ -2267,6 +2380,13 @@ async function completeTask(task){
     const txn = (currentTxn && currentTxn.id === task.transaction_id) ? currentTxn : txnCache.find(t => t.id === task.transaction_id);
     const address = txn ? txn.property_address : (await db.from('transactions').select('property_address').eq('id', task.transaction_id).single()).data?.property_address;
     sendClientMilestoneEmail(MILESTONE_TASK_MAP[task.task_text], task.transaction_id, address);
+  }
+
+  // Open house scheduled — creates a GBP post task for Dawn, no client email
+  if (task.task_text === 'Schedule open house (if applicable)') {
+    const txn = (currentTxn && currentTxn.id === task.transaction_id) ? currentTxn : txnCache.find(t => t.id === task.transaction_id);
+    const address = txn ? txn.property_address : (await db.from('transactions').select('property_address').eq('id', task.transaction_id).single()).data?.property_address;
+    createGbpTask('open_house', task.transaction_id, address, txn);
   }
 }
 
