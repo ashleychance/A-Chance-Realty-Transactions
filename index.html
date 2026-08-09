@@ -199,6 +199,7 @@
   }
   .txn-card:active{ background:#faf9f6; }
   .txn-card .addr{ font-weight:600; font-size:18px; margin-bottom:4px; }
+  .card-mls{ font-size:13px; color:var(--text-muted); margin-bottom:6px; }
   .txn-card .client{ font-size:15px; color:var(--text-muted); margin-bottom:10px; }
   .closing-date-line{ font-size:13px; color:var(--accent-dark); font-weight:600; margin:-4px 0 10px; }
   .status-badge{
@@ -237,6 +238,7 @@
   .detail-head-row h1{ flex:1; }
   .detail-head h1{ font-size:24px; margin:0 0 2px; }
   .detail-head .client{ font-size:15px; color:var(--text-muted); margin-bottom:10px; }
+  .mls-line{ font-size:13px; color:var(--text-muted); margin:-6px 0 10px; }
 
   .status-select{ width:auto; display:inline-block; font-size:14px; font-weight:700; padding:5px 10px; border-radius:20px; border:1px solid var(--border); margin-bottom:14px; }
 
@@ -551,6 +553,7 @@
           <button class="edit-task-btn" id="edit-txn-btn" title="Edit transaction details">✎</button>
         </div>
         <div class="client" id="detail-client"></div>
+        <div class="mls-line" id="detail-mls"></div>
         <select class="status-select" id="detail-status"></select>
         <div class="key-dates">
           <div class="key-date-field">
@@ -648,6 +651,10 @@
     <div class="field">
       <label>Property Address</label>
       <input type="text" id="new-address" placeholder="123 Main St, Benton, LA" />
+    </div>
+    <div class="field">
+      <label>MLS # (optional)</label>
+      <input type="text" id="new-mls" />
     </div>
     <div class="field">
       <label>Client Name</label>
@@ -792,6 +799,10 @@
     <div class="field">
       <label>Property Address</label>
       <input type="text" id="edit-txn-address" />
+    </div>
+    <div class="field">
+      <label>MLS #</label>
+      <input type="text" id="edit-txn-mls" />
     </div>
     <div class="field">
       <label>Client Name</label>
@@ -1337,6 +1348,7 @@ function renderTransactionCards(){
       <span class="side-badge">${t.side === 'buyer' ? 'Buying' : t.side === 'dual' ? 'Dual' : 'Listing'}</span>
       ${overdueCount > 0 ? `<span class="card-overdue-badge">${overdueCount} overdue</span>` : ''}
       <div class="addr">${escapeHtml(t.property_address)}</div>
+      ${t.mls_number ? `<div class="card-mls">MLS# ${escapeHtml(t.mls_number)}</div>` : ''}
       <div class="client">${t.client_name ? escapeHtml(t.client_name) : ''}</div>
       ${t.closing_date ? `<div class="closing-date-line">Closing: ${formatShortDate(t.closing_date)}</div>` : ''}
       <div class="progress-row">
@@ -1357,6 +1369,7 @@ function statusLabel(s){
 // ---------------- NEW TRANSACTION MODAL ----------------
 $('new-txn-fab').addEventListener('click', () => {
   $('new-address').value = '';
+  $('new-mls').value = '';
   $('new-client').value = '';
   $('new-txn-err').textContent = '';
   $('new-txn-modal').classList.remove('hidden');
@@ -1365,13 +1378,14 @@ $('new-txn-cancel').addEventListener('click', () => $('new-txn-modal').classList
 
 $('new-txn-save').addEventListener('click', async () => {
   const address = $('new-address').value.trim();
+  const mls = $('new-mls').value.trim();
   const client = $('new-client').value.trim();
   if (!address) { $('new-txn-err').textContent = 'Address is required.'; return; }
 
   const side = $('new-side').value;
   $('new-txn-save').disabled = true;
   const { data: newTxn, error } = await db.from('transactions')
-    .insert({ property_address: address, client_name: client || null, side: side, created_by: currentMember.id })
+    .insert({ property_address: address, mls_number: mls || null, client_name: client || null, side: side, created_by: currentMember.id })
     .select().single();
 
   if (error) {
@@ -1402,6 +1416,7 @@ async function openTransaction(id, focusTaskId){
   currentTxn = t;
   $('detail-address').textContent = t.property_address;
   $('detail-client').textContent = t.client_name || '';
+  $('detail-mls').textContent = t.mls_number ? `MLS# ${t.mls_number}` : '';
 
   const sel = $('detail-status');
   sel.innerHTML = STATUSES.map(s => `<option value="${s[0]}" ${s[0]===t.status?'selected':''}>${s[1]}</option>`).join('');
@@ -2501,6 +2516,7 @@ let editingTaskTextEl = null;
 
 $('edit-txn-btn').addEventListener('click', () => {
   $('edit-txn-address').value = currentTxn.property_address || '';
+  $('edit-txn-mls').value = currentTxn.mls_number || '';
   $('edit-txn-client').value = currentTxn.client_name || '';
   $('edit-txn-err').textContent = '';
   $('edit-txn-modal').classList.remove('hidden');
@@ -2509,20 +2525,23 @@ $('edit-txn-cancel').addEventListener('click', () => $('edit-txn-modal').classLi
 
 $('edit-txn-save').addEventListener('click', async () => {
   const address = $('edit-txn-address').value.trim();
+  const mls = $('edit-txn-mls').value.trim();
   const client = $('edit-txn-client').value.trim();
   if (!address) { $('edit-txn-err').textContent = 'Address is required.'; return; }
 
   $('edit-txn-save').disabled = true;
   const { error } = await db.from('transactions')
-    .update({ property_address: address, client_name: client || null })
+    .update({ property_address: address, mls_number: mls || null, client_name: client || null })
     .eq('id', currentTxnId);
   $('edit-txn-save').disabled = false;
 
   if (error) { $('edit-txn-err').textContent = error.message; return; }
 
   currentTxn.property_address = address;
+  currentTxn.mls_number = mls || null;
   currentTxn.client_name = client || null;
   $('detail-address').textContent = address;
+  $('detail-mls').textContent = mls ? `MLS# ${mls}` : '';
   $('detail-client').textContent = client || '';
   $('edit-txn-modal').classList.add('hidden');
 });
