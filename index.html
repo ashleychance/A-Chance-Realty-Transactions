@@ -302,6 +302,28 @@
   .qs-grid{ display:grid; grid-template-columns:1fr 1fr; gap:10px 12px; margin-bottom:14px; }
   .qs-field label{ margin-bottom:3px; }
   .qs-field input{ font-size:15px; padding:8px 10px; }
+  .qs-comm-dollars{
+    margin-top:4px; font-size:15px; font-weight:700; color:var(--accent-dark);
+    overflow-wrap:anywhere;
+  }
+
+  .ytd-tally{
+    background:var(--surface); border:1px solid var(--border); border-radius:12px;
+    padding:12px 14px; margin-bottom:14px; min-width:0;
+  }
+  .ytd-tally-title{
+    font-family:'Fraunces',serif; font-size:16px; font-weight:600; margin-bottom:8px;
+  }
+  .ytd-tally-grid{
+    display:grid; grid-template-columns:1fr 1fr 1fr; gap:8px;
+    min-width:0;
+  }
+  @media (max-width:340px){
+    .ytd-tally-grid{ grid-template-columns:1fr 1fr; }
+  }
+  .ytd-stat{ min-width:0; }
+  .ytd-stat-label{ display:block; font-size:12px; font-weight:600; color:var(--text-muted); text-transform:uppercase; letter-spacing:.03em; }
+  .ytd-stat-val{ display:block; font-size:17px; font-weight:700; color:var(--accent-dark); overflow-wrap:anywhere; }
   .qs-milestone-row{
     display:flex; align-items:center; gap:10px; padding:8px 0; border-top:1px solid var(--border);
   }
@@ -623,6 +645,7 @@
       <div class="list-header">
         <h1>Transactions</h1>
       </div>
+      <div id="ytd-tally" class="ytd-tally"></div>
       <input type="text" id="txn-search" class="search-input" placeholder="Search by address or client..." />
       <div class="filter-tabs">
         <button class="filter-tab active" data-filter="active">Active</button>
@@ -692,12 +715,12 @@
             <input type="text" id="qs-opp-agent" autocomplete="off" />
             <div id="opp-agent-suggestions" class="dir-suggest-box"></div>
           </div>
-          <div class="qs-field"><label>BAC</label><input type="text" id="qs-bac" placeholder="e.g. 3%" /></div>
+          <div class="qs-field"><label>BAC</label><input type="text" id="qs-bac" placeholder="e.g. 3%" /><div class="qs-comm-dollars hidden" id="qs-bac-dollars"></div></div>
           <div class="qs-field"><label>Bedrooms</label><input type="number" id="qs-bedrooms" min="0" /></div>
           <div class="qs-field"><label>Bathrooms</label><input type="number" id="qs-bathrooms" min="0" step="0.5" /></div>
           <div class="qs-field"><label>Sq Ft</label><input type="number" id="qs-sqft" min="0" /></div>
           <div class="qs-field" style="grid-column:1/-1;"><label>Primary Photo URL</label><input type="text" id="qs-photo-url" placeholder="Paste a link to the main listing photo" /></div>
-          <div class="qs-field" style="grid-column:1/-1;"><label>Agent Commission Note</label><input type="text" id="qs-agent-comm" /></div>
+          <div class="qs-field" style="grid-column:1/-1;"><label>Agent Commission Note</label><input type="text" id="qs-agent-comm" /><div class="qs-comm-dollars hidden" id="qs-note-dollars"></div></div>
           <div class="qs-field" style="grid-column:1/-1;"><label>Transaction fee</label><input type="text" id="qs-txn-fee" inputmode="decimal" placeholder="$" /></div>
         </div>
 
@@ -1427,6 +1450,7 @@ async function loadTransactions(){
   const { data: transactions, error } = await db.from('transactions').select('*').order('created_at', { ascending:false });
   if (error) { console.error(error); return; }
   txnCache = transactions || [];
+  renderYtdTally();
 
   const ids = txnCache.map(t => t.id);
   const { data: allTasks } = ids.length
@@ -1611,11 +1635,19 @@ async function openTransaction(id, focusTaskId){
     const oldVal = currentTxn.list_price;
     saveDealField('list_price', newVal);
     currentTxn.list_price = newVal;
+    refreshCommissionDollars();
     if (currentTxn.status === 'active' && newVal !== oldVal && newVal !== null) {
       createGbpTask('price_change', currentTxnId, currentTxn.property_address);
     }
   };
-  $('qs-sale-price').onchange = () => saveDealField('sale_price', numOrNull($('qs-sale-price').value));
+  $('qs-sale-price').onchange = () => {
+    const v = numOrNull($('qs-sale-price').value);
+    saveDealField('sale_price', v);
+    currentTxn.sale_price = v;
+    refreshCommissionDollars();
+  };
+  $('qs-list-price').oninput = refreshCommissionDollars;
+  $('qs-sale-price').oninput = refreshCommissionDollars;
   $('qs-opp-agent').onchange = () => saveDealField('opposing_agent', $('qs-opp-agent').value || null);
 
   $('qs-opp-agent').oninput = () => {
@@ -1643,14 +1675,26 @@ async function openTransaction(id, focusTaskId){
   $('qs-opp-agent').addEventListener('blur', () => {
     setTimeout(() => { $('opp-agent-suggestions').innerHTML = ''; }, 150);
   });
-  $('qs-bac').onchange = () => saveDealField('buyer_agent_commission', $('qs-bac').value || null);
-  $('qs-agent-comm').onchange = () => saveDealField('agent_commission_note', $('qs-agent-comm').value || null);
+  $('qs-bac').onchange = () => {
+    saveDealField('buyer_agent_commission', $('qs-bac').value || null);
+    if (currentTxn) currentTxn.buyer_agent_commission = $('qs-bac').value || null;
+    refreshCommissionDollars();
+  };
+  $('qs-agent-comm').onchange = () => {
+    saveDealField('agent_commission_note', $('qs-agent-comm').value || null);
+    if (currentTxn) currentTxn.agent_commission_note = $('qs-agent-comm').value || null;
+    refreshCommissionDollars();
+  };
+  $('qs-bac').oninput = refreshCommissionDollars;
+  $('qs-agent-comm').oninput = refreshCommissionDollars;
   $('qs-txn-fee').onchange = () => saveDealField('transaction_fee', $('qs-txn-fee').value || null);
   $('qs-bedrooms').onchange = () => saveDealField('list_bedrooms', $('qs-bedrooms').value ? parseInt($('qs-bedrooms').value) : null);
   $('qs-bathrooms').onchange = () => saveDealField('list_bathrooms', $('qs-bathrooms').value ? parseFloat($('qs-bathrooms').value) : null);
   $('qs-sqft').onchange = () => saveDealField('list_sqft', $('qs-sqft').value ? parseInt($('qs-sqft').value) : null);
   $('qs-photo-url').onchange = () => saveDealField('primary_photo_url', $('qs-photo-url').value || null);
   $('qs-do-not-solicit').onchange = () => saveDealField('do_not_solicit', $('qs-do-not-solicit').checked);
+
+  refreshCommissionDollars();
 
   await loadTasks();
   await loadContacts();
@@ -2254,8 +2298,109 @@ async function saveKeyDate(column, value){
 }
 
 function numOrNull(v){
+  if (v === null || v === undefined || v === '') return null;
+  if (typeof v === 'number') return isNaN(v) ? null : v;
   const n = parseFloat(String(v).replace(/[^0-9.]/g, ''));
   return isNaN(n) ? null : n;
+}
+
+function isCleanCommissionText(raw){
+  return /^\s*\$?\s*[\d,]+(\.\d+)?\s*%?\s*$/.test(String(raw || ''));
+}
+
+function parseCommissionInput(raw){
+  const s = String(raw == null ? '' : raw).trim();
+  if (!s) return { kind: 'empty' };
+  const n = parseFloat(s.replace(/[^0-9.]/g, ''));
+  if (isNaN(n)) return { kind: 'empty' };
+  const hasPct = /%/.test(s);
+  const hasDollar = /\$/.test(s);
+  if (hasDollar && !hasPct) return { kind: 'dollars', value: n };
+  if (hasPct) return { kind: 'percent', value: n };
+  if (n <= 15) return { kind: 'percent', value: n };
+  return { kind: 'dollars', value: n };
+}
+
+function dealVolume(txn){
+  const sale = numOrNull(txn && txn.sale_price);
+  if (sale != null) return sale;
+  return numOrNull(txn && txn.list_price);
+}
+
+function commissionDollars(raw, price){
+  const parsed = parseCommissionInput(raw);
+  if (parsed.kind === 'empty') return null;
+  if (parsed.kind === 'dollars') return parsed.value;
+  if (price == null) return null;
+  return price * (parsed.value / 100);
+}
+
+function dealGci(txn){
+  const price = dealVolume(txn);
+  const bac = commissionDollars(txn && txn.buyer_agent_commission, price);
+  if (bac != null) return bac;
+  if (isCleanCommissionText(txn && txn.agent_commission_note)) {
+    return commissionDollars(txn.agent_commission_note, price);
+  }
+  return null;
+}
+
+function formatCommissionMoney(n){
+  if (n === null || n === undefined || n === '') return '';
+  const rounded = Math.round(Number(n) * 100) / 100;
+  if (isNaN(rounded)) return '';
+  const opts = Number.isInteger(rounded)
+    ? { maximumFractionDigits: 0 }
+    : { minimumFractionDigits: 2, maximumFractionDigits: 2 };
+  return '$' + rounded.toLocaleString('en-US', opts);
+}
+
+function setCommDollarsEl(id, amount, label){
+  const el = $(id);
+  if (!el) return;
+  if (amount == null) { el.classList.add('hidden'); el.textContent = ''; return; }
+  el.textContent = (label ? label + ' ' : '') + formatCommissionMoney(amount);
+  el.classList.remove('hidden');
+}
+
+function refreshCommissionDollars(){
+  const price = dealVolume({
+    sale_price: $('qs-sale-price') ? $('qs-sale-price').value : '',
+    list_price: $('qs-list-price') ? $('qs-list-price').value : ''
+  });
+  setCommDollarsEl('qs-bac-dollars', commissionDollars($('qs-bac') ? $('qs-bac').value : '', price));
+  const note = $('qs-agent-comm') ? $('qs-agent-comm').value : '';
+  const noteAmt = isCleanCommissionText(note) ? commissionDollars(note, price) : null;
+  setCommDollarsEl('qs-note-dollars', noteAmt);
+}
+
+function chicagoCalendarYear(){
+  return Number(new Intl.DateTimeFormat('en-US', { timeZone: 'America/Chicago', year: 'numeric' }).format(new Date()));
+}
+
+function renderYtdTally(){
+  const box = $('ytd-tally');
+  if (!box) return;
+  const year = chicagoCalendarYear();
+  const closed = (txnCache || []).filter(t =>
+    t.status === 'closed' && t.closing_date && String(t.closing_date).slice(0, 4) === String(year)
+  );
+  let volume = 0;
+  let gci = 0;
+  closed.forEach(t => {
+    const vol = dealVolume(t);
+    if (vol != null) volume += vol;
+    const comm = dealGci(t);
+    if (comm != null) gci += comm;
+  });
+  box.innerHTML = `
+    <div class="ytd-tally-title">${year} production</div>
+    <div class="ytd-tally-grid">
+      <div class="ytd-stat"><span class="ytd-stat-label">Volume</span><span class="ytd-stat-val">${formatCommissionMoney(volume) || '$0'}</span></div>
+      <div class="ytd-stat"><span class="ytd-stat-label">GCI</span><span class="ytd-stat-val">${formatCommissionMoney(gci) || '$0'}</span></div>
+      <div class="ytd-stat"><span class="ytd-stat-label">Closed</span><span class="ytd-stat-val">${closed.length}</span></div>
+    </div>
+  `;
 }
 
 async function saveDealField(column, value){
@@ -2354,6 +2499,7 @@ async function resetFellThroughDeal(txn){
   $('key-contract-date').value = '';
   $('key-closing-date').value = '';
   $('qs-sale-price').value = '';
+  refreshCommissionDollars();
   diligenceBackfilledFor = null;
   refreshAllCalendarLinks();
   updateFellThroughButton();
