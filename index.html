@@ -285,13 +285,43 @@
   #fell-through-btn{ max-width:100%; }
 
   .key-dates{
-    display:flex; gap:10px; flex-wrap:wrap; background:var(--surface); border:1px solid var(--border);
+    display:grid;
+    grid-template-columns:repeat(3, minmax(0, 1fr));
+    align-items:stretch;
+    gap:10px;
+    background:var(--surface); border:1px solid var(--border);
     border-radius:10px; padding:12px; margin-bottom:6px;
+    min-width:0;
   }
-  .key-date-field{ flex:1; min-width:110px; }
-  .key-date-field label{ margin-bottom:3px; }
-  .key-date-field input{ font-size:15px; padding:8px 10px; }
+  .key-dates.key-dates-buyer{ grid-template-columns:repeat(2, minmax(0, 1fr)); }
+  .key-date-field{
+    display:flex;
+    flex-direction:column;
+    min-width:0;
+  }
+  .key-date-field label{
+    margin-bottom:3px;
+    min-height:2.75em;
+    display:flex;
+    align-items:flex-end;
+    line-height:1.25;
+    overflow-wrap:anywhere;
+  }
+  .key-date-field input{ width:100%; min-width:0; font-size:15px; padding:8px 10px; }
   .add-cal-link{ display:block; font-size:13px; color:var(--accent-dark); margin-top:4px; text-decoration:none; }
+  /* Keep an empty calendar-link row so a missing date does not lift that column */
+  .key-dates .add-cal-link{
+    min-height:1.4em;
+    line-height:1.4em;
+  }
+  .key-dates .add-cal-link.hidden{
+    display:block !important;
+    visibility:hidden;
+    pointer-events:none;
+  }
+  @media (max-width:420px){
+    .key-date-field label{ min-height:3.75em; }
+  }
   .key-dates-hint{ font-size:14px; color:var(--text-muted); margin:6px 0 18px; }
 
   .qs-card{
@@ -682,8 +712,8 @@
           <select class="status-select" id="detail-status"></select>
           <button type="button" class="secondary small hidden" id="fell-through-btn">Deal fell through — back to Active</button>
         </div>
-        <div class="key-dates">
-          <div class="key-date-field">
+        <div class="key-dates" id="deal-key-dates">
+          <div class="key-date-field" id="key-listing-field">
             <label>Listing (Go-Live) Date</label>
             <input type="date" id="key-listing-date" />
             <a href="#" id="cal-listing" class="add-cal-link hidden" target="_blank">📅 Add to Calendar</a>
@@ -1605,8 +1635,10 @@ async function openTransaction(id, focusTaskId){
     await resetFellThroughDeal(t);
   };
 
-  // Buyer-side deals have no listing date
-  $('key-listing-date').parentElement.style.display = (t.side === 'buyer') ? 'none' : '';
+  // Buyer-side deals have no listing date — keep a 2-column grid so Contract/Closing stay aligned
+  const hideListing = t.side === 'buyer';
+  $('key-listing-field').style.display = hideListing ? 'none' : '';
+  $('deal-key-dates').classList.toggle('key-dates-buyer', hideListing);
 
   $('key-listing-date').value = t.listing_date || '';
   $('key-contract-date').value = t.contract_date || '';
