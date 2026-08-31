@@ -339,6 +339,35 @@
   }
   .qs-diligence-add-all:disabled{ opacity:.45; cursor:default; }
 
+  .deal-docs-actions{
+    display:flex; flex-wrap:wrap; gap:8px; margin-bottom:12px;
+  }
+  .deal-docs-actions button{ flex:1 1 140px; min-width:0; }
+  .deal-docs-hidden-input{
+    position:absolute; width:1px; height:1px; padding:0; margin:-1px;
+    overflow:hidden; clip:rect(0,0,0,0); border:0;
+  }
+  .deal-docs-list{ display:flex; flex-direction:column; gap:8px; min-width:0; }
+  .deal-doc-row{
+    display:flex; align-items:center; gap:10px;
+    background:var(--bg); border-radius:10px; padding:8px 10px;
+    min-width:0;
+  }
+  .deal-doc-thumb{
+    width:52px; height:52px; border-radius:8px; object-fit:cover;
+    background:#fff; flex-shrink:0;
+  }
+  .deal-doc-icon{
+    width:52px; height:52px; border-radius:8px; background:#fff;
+    display:flex; align-items:center; justify-content:center;
+    font-size:11px; font-weight:700; color:var(--accent-dark);
+    flex-shrink:0; letter-spacing:.02em;
+  }
+  .deal-doc-meta{ flex:1; min-width:0; cursor:pointer; }
+  .deal-doc-name{ font-size:15px; font-weight:600; overflow-wrap:anywhere; }
+  .deal-doc-sub{ font-size:13px; color:var(--text-muted); }
+  .deal-docs-status{ font-size:15px; color:var(--text-muted); padding:8px 0; }
+
   .phase-lock-note{ font-size:14px; color:var(--text-muted); font-style:italic; }
   details.phase.locked summary{ opacity:.75; }
   .checkbox.locked{ cursor:not-allowed; opacity:.4; }
@@ -691,6 +720,19 @@
         </div>
 
         <div id="qs-milestones"></div>
+      </div>
+
+      <div class="qs-card" id="deal-docs-card">
+        <div class="qs-title">Documents</div>
+        <div class="deal-docs-actions">
+          <button type="button" class="secondary" id="deal-docs-photo-btn">Take photo</button>
+          <button type="button" class="secondary" id="deal-docs-upload-btn">Upload or screenshot</button>
+        </div>
+        <input type="file" id="deal-docs-camera" class="deal-docs-hidden-input" accept="image/*" capture="environment" />
+        <input type="file" id="deal-docs-file" class="deal-docs-hidden-input" accept="image/*,application/pdf" multiple />
+        <div id="deal-docs-status" class="deal-docs-status hidden"></div>
+        <div id="deal-docs-list" class="deal-docs-list"></div>
+        <div id="deal-docs-empty" class="contacts-empty hidden">No documents yet. Take a photo or upload a file.</div>
       </div>
 
       <div class="qs-card">
@@ -1613,6 +1655,7 @@ async function openTransaction(id, focusTaskId){
   await loadTasks();
   await loadContacts();
   await loadClients();
+  await loadDealDocuments();
 
   if (focusTaskId) focusOnTask(focusTaskId);
 }
@@ -1742,6 +1785,166 @@ async function syncClientNameSummary(){
   currentTxn.client_name = summary;
   $('detail-client').textContent = summary;
 }
+
+// ---------------- DEAL DOCUMENTS ----------------
+// Bucket deal-docs + txn.deal_documents are created on project
+// nmttottwzbxumsmqligf. If they are not visible yet, show "Documents not ready".
+function isDealDocsUnavailable(error){
+  if (!error) return false;
+  const msg = `${error.message || ''} ${error.code || ''} ${error.details || ''}`;
+  return /deal_documents|deal-docs|42P01|PGRST205|schema cache|does not exist|not found/i.test(msg);
+}
+
+function formatDocUploadedAt(iso){
+  if (!iso) return '';
+  const d = new Date(iso);
+  if (isNaN(d.getTime())) return '';
+  return d.toLocaleDateString('en-US', { month:'numeric', day:'numeric', year:'2-digit' });
+}
+
+function safeDealDocName(name){
+  const base = String(name || 'file').replace(/^.*[\\/]/, '');
+  const cleaned = base.replace(/[^a-zA-Z0-9._-]+/g, '_').replace(/^_+|_+$/g, '');
+  return (cleaned || 'file').slice(0, 80);
+}
+
+function setDealDocsStatus(text){
+  const el = $('deal-docs-status');
+  if (!text) { el.classList.add('hidden'); el.textContent = ''; return; }
+  el.textContent = text;
+  el.classList.remove('hidden');
+}
+
+async function loadDealDocuments(){
+  const list = $('deal-docs-list');
+  const empty = $('deal-docs-empty');
+  list.innerHTML = '';
+  empty.classList.add('hidden');
+  setDealDocsStatus('');
+  if (!currentTxnId) return;
+
+  const { data, error } = await db.from('deal_documents')
+    .select('*')
+    .eq('transaction_id', currentTxnId)
+    .order('created_at', { ascending: false });
+
+  if (error) {
+    setDealDocsStatus(isDealDocsUnavailable(error) ? 'Documents not ready' : error.message);
+    return;
+  }
+
+  if (!data || data.length === 0) {
+    empty.classList.remove('hidden');
+    return;
+  }
+
+  data.forEach(doc => list.appendChild(renderDealDocRow(doc)));
+}
+
+function renderDealDocRow(doc){
+  const row = document.createElement('div');
+  row.className = 'deal-doc-row';
+
+  const isImage = String(doc.mime_type || '').startsWith('image/');
+  if (isImage) {
+    const img = document.createElement('img');
+    img.className = 'deal-doc-thumb';
+    img.alt = '';
+    img.referrerPolicy = 'no-referrer';
+    row.appendChild(img);
+    sbRoot.storage.from('deal-docs').createSignedUrl(doc.storage_path, 3600).then(({ data }) => {
+      if (data && data.signedUrl) img.src = data.signedUrl;
+    }).catch(() => {});
+  } else {
+    const icon = document.createElement('div');
+    icon.className = 'deal-doc-icon';
+    icon.textContent = /pdf/i.test(doc.mime_type || doc.file_name || '') ? 'PDF' : 'FILE';
+    row.appendChild(icon);
+  }
+
+  const meta = document.createElement('div');
+  meta.className = 'deal-doc-meta';
+  meta.innerHTML = `
+    <div class="deal-doc-name">${escapeHtml(doc.file_name || 'Untitled')}</div>
+    <div class="deal-doc-sub">${escapeHtml(formatDocUploadedAt(doc.created_at))}</div>
+  `;
+  meta.addEventListener('click', () => openDealDocument(doc));
+
+  const del = document.createElement('button');
+  del.className = 'del-btn';
+  del.type = 'button';
+  del.textContent = '✕';
+  del.title = 'Delete document';
+  del.addEventListener('click', async (e) => {
+    e.stopPropagation();
+    if (!confirm(`Delete "${doc.file_name || 'this file'}"?`)) return;
+    await deleteDealDocument(doc);
+  });
+
+  row.appendChild(meta);
+  row.appendChild(del);
+  return row;
+}
+
+async function openDealDocument(doc){
+  const { data, error } = await sbRoot.storage.from('deal-docs').createSignedUrl(doc.storage_path, 3600);
+  if (error || !data || !data.signedUrl) {
+    setDealDocsStatus(isDealDocsUnavailable(error) ? 'Documents not ready' : ((error && error.message) || 'Could not open file.'));
+    return;
+  }
+  window.open(data.signedUrl, '_blank', 'noopener');
+}
+
+async function deleteDealDocument(doc){
+  await sbRoot.storage.from('deal-docs').remove([doc.storage_path]);
+  const { error } = await db.from('deal_documents').delete().eq('id', doc.id);
+  if (error) {
+    setDealDocsStatus(isDealDocsUnavailable(error) ? 'Documents not ready' : error.message);
+    return;
+  }
+  await loadDealDocuments();
+}
+
+async function uploadDealDoc(file){
+  if (!file || !currentTxnId || !currentMember) return;
+  setDealDocsStatus('Uploading…');
+  const id = (crypto.randomUUID && crypto.randomUUID()) || String(Date.now()) + '-' + Math.random().toString(16).slice(2);
+  const path = `${currentTxnId}/${id}-${safeDealDocName(file.name)}`;
+  const { error: upErr } = await sbRoot.storage.from('deal-docs').upload(path, file, {
+    contentType: file.type || 'application/octet-stream',
+    upsert: false
+  });
+  if (upErr) {
+    setDealDocsStatus(isDealDocsUnavailable(upErr) ? 'Documents not ready' : upErr.message);
+    return;
+  }
+  const { error: rowErr } = await db.from('deal_documents').insert({
+    transaction_id: currentTxnId,
+    storage_path: path,
+    file_name: file.name || 'file',
+    mime_type: file.type || null,
+    file_size: file.size || null,
+    uploaded_by: currentMember.user_id || currentMember.id
+  });
+  if (rowErr) {
+    setDealDocsStatus(isDealDocsUnavailable(rowErr) ? 'Documents not ready' : rowErr.message);
+    return;
+  }
+  await loadDealDocuments();
+}
+
+$('deal-docs-photo-btn').addEventListener('click', () => $('deal-docs-camera').click());
+$('deal-docs-upload-btn').addEventListener('click', () => $('deal-docs-file').click());
+$('deal-docs-camera').addEventListener('change', async (e) => {
+  const files = [...(e.target.files || [])];
+  e.target.value = '';
+  for (const f of files) await uploadDealDoc(f);
+});
+$('deal-docs-file').addEventListener('change', async (e) => {
+  const files = [...(e.target.files || [])];
+  e.target.value = '';
+  for (const f of files) await uploadDealDoc(f);
+});
 
 // ---------------- CONTACTS ----------------
 let contactsCache = [];
