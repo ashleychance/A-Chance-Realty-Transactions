@@ -29,13 +29,27 @@
     --warning-bg:#faf1e2;
   }
   *{ box-sizing:border-box; }
+  html{
+    width:100%;
+    max-width:100%;
+    overflow-x:hidden;
+    overflow-x:clip;
+    overscroll-behavior-x:none;
+    -webkit-text-size-adjust:100%;
+    text-size-adjust:100%;
+  }
   body{
     margin:0;
+    width:100%;
+    max-width:100%;
+    overflow-x:hidden;
+    overflow-x:clip;
     background:var(--bg);
     color:var(--text);
     font-family:'Inter',-apple-system,BlinkMacSystemFont,sans-serif;
     -webkit-font-smoothing:antialiased;
   }
+  #app-view{ max-width:100%; min-width:0; }
   h1,h2,h3,.display{ font-family:'Fraunces',serif; }
   .hidden{ display:none !important; }
 
@@ -47,21 +61,40 @@
     display:flex;
     align-items:center;
     justify-content:space-between;
+    gap:10px 16px;
     position:sticky;
     top:0;
     z-index:10;
+    min-width:0;
   }
-  header.topbar .brand{ display:flex; flex-direction:column; }
-  header.topbar .brand .name{ font-size:20px; font-weight:600; }
+  header.topbar .brand{ display:flex; flex-direction:column; min-width:0; }
+  header.topbar .brand .name{ font-size:20px; font-weight:600; overflow-wrap:anywhere; }
   header.topbar .brand .sub{ font-size:14px; color:var(--text-muted); }
-  header.topbar .user{ display:flex; align-items:center; gap:10px; }
-  header.topbar .user .who{ font-size:15px; color:var(--text-muted); text-align:right; }
+  header.topbar .user{ display:flex; align-items:center; gap:10px; min-width:0; }
+  header.topbar .user .who{ font-size:15px; color:var(--text-muted); text-align:right; overflow-wrap:anywhere; }
   header.topbar button.linklike{
     background:none; border:none; color:var(--accent-dark);
     font-size:15px; font-weight:600; cursor:pointer; padding:4px;
   }
+  @media (max-width:720px){
+    header.topbar{
+      flex-wrap:wrap;
+      align-items:flex-start;
+      padding:14px 16px;
+    }
+    header.topbar .user{
+      flex:1 0 100%;
+      flex-wrap:wrap;
+      justify-content:flex-start;
+      gap:6px 14px;
+    }
+    header.topbar .user .who{
+      flex:1 0 100%;
+      text-align:left;
+    }
+  }
 
-  main{ max-width:640px; margin:0 auto; padding:18px 16px 80px; }
+  main{ max-width:640px; width:100%; min-width:0; margin:0 auto; padding:18px 16px 80px; }
 
   /* ---------- Auth ---------- */
   .auth-wrap{
@@ -102,11 +135,14 @@
   /* ---------- Transaction list ---------- */
   .tabs{
     display:flex; gap:6px; background:var(--surface); border:1px solid var(--border);
-    border-radius:10px; padding:4px; margin-bottom:16px;
+    border-radius:10px; padding:4px; margin-bottom:16px; min-width:0;
   }
   .tab{
-    flex:1; padding:9px 0; border:none; border-radius:7px; background:none;
+    flex:1; min-width:0; padding:9px 4px; border:none; border-radius:7px; background:none;
     font-size:17px; font-weight:600; color:var(--text-muted); cursor:pointer; font-family:inherit;
+  }
+  @media (max-width:360px){
+    .tab{ font-size:15px; }
   }
   .tab.active{ background:var(--accent); color:#fff; }
   .tab-badge{
@@ -131,14 +167,14 @@
     border-radius:10px; padding:11px 14px; margin-bottom:8px; cursor:pointer;
   }
   .closing-card-date{ font-family:'Fraunces',serif; font-weight:700; font-size:15px; color:var(--accent-dark); white-space:nowrap; }
-  .closing-card-addr{ font-size:15px; font-weight:600; flex:1; min-width:0; }
+  .closing-card-addr{ font-size:15px; font-weight:600; flex:1; min-width:0; overflow-wrap:anywhere; }
 
   #view-as-row{
     display:flex; align-items:center; gap:8px; background:var(--surface); border:1px solid var(--border);
-    border-radius:10px; padding:10px 12px; margin-bottom:14px;
+    border-radius:10px; padding:10px 12px; margin-bottom:14px; min-width:0;
   }
   #view-as-row label{ font-size:14px; color:var(--text-muted); margin-bottom:0; white-space:nowrap; }
-  #view-as-row select{ flex:1; font-size:15px; padding:6px 8px; }
+  #view-as-row select{ flex:1; min-width:0; font-size:15px; padding:6px 8px; }
 
   .mt-group-title{
     font-family:'Fraunces',serif; font-size:18px; font-weight:600; margin:18px 0 8px 2px;
@@ -172,7 +208,7 @@
     padding:12px 14px; margin-bottom:8px; display:flex; gap:10px; align-items:flex-start;
   }
   .mt-body{ flex:1; min-width:0; cursor:pointer; }
-  .mt-text{ font-size:17px; margin-bottom:3px; }
+  .mt-text{ font-size:17px; margin-bottom:3px; overflow-wrap:anywhere; }
   .mt-sub{ font-size:14px; color:var(--text-muted); }
   .mt-due{ font-size:14px; font-weight:700; white-space:nowrap; margin-top:2px; }
   .mt-due.overdue{ color:var(--danger); }
@@ -186,7 +222,7 @@
   .search-input{
     margin-bottom:10px; padding:10px 12px; font-size:17px;
   }
-  .filter-tabs{ display:flex; gap:6px; margin-bottom:14px; }
+  .filter-tabs{ display:flex; flex-wrap:wrap; gap:6px; margin-bottom:14px; }
   .filter-tab{
     padding:6px 14px; border:1px solid var(--border); border-radius:20px; background:var(--surface);
     color:var(--text-muted); font-size:15px; font-weight:600; cursor:pointer; font-family:inherit;
@@ -198,7 +234,7 @@
     padding:16px; margin-bottom:12px; cursor:pointer;
   }
   .txn-card:active{ background:#faf9f6; }
-  .txn-card .addr{ font-weight:600; font-size:18px; margin-bottom:4px; }
+  .txn-card .addr{ font-weight:600; font-size:18px; margin-bottom:4px; overflow-wrap:anywhere; }
   .card-mls{ font-size:13px; color:var(--text-muted); margin-bottom:6px; }
   .txn-card .client{ font-size:15px; color:var(--text-muted); margin-bottom:10px; }
   .closing-date-line{ font-size:13px; color:var(--accent-dark); font-weight:600; margin:-4px 0 10px; }
@@ -217,9 +253,9 @@
   .status-closed{ background:#eee; color:var(--text-muted); }
   .status-cancelled{ background:var(--danger-bg); color:var(--danger); }
 
-  .progress-row{ display:flex; align-items:center; gap:8px; }
+  .progress-row{ display:flex; align-items:center; gap:8px; min-width:0; }
   .progress-track{
-    flex:1; height:6px; background:var(--border); border-radius:4px; overflow:hidden;
+    flex:1; min-width:0; height:6px; background:var(--border); border-radius:4px; overflow:hidden;
   }
   .progress-fill{ height:100%; background:var(--accent); }
   .progress-label{ font-size:14px; color:var(--text-muted); white-space:nowrap; }
@@ -234,22 +270,58 @@
     font-weight:600; cursor:pointer; padding:0; margin-bottom:14px; display:flex; align-items:center; gap:4px;
   }
   .detail-head{ margin-bottom:6px; }
-  .detail-head-row{ display:flex; align-items:flex-start; gap:8px; }
-  .detail-head-row h1{ flex:1; }
-  .detail-head h1{ font-size:24px; margin:0 0 2px; }
+  .detail-head-row{ display:flex; align-items:flex-start; gap:8px; min-width:0; }
+  .detail-head-row h1{ flex:1; min-width:0; }
+  .detail-head h1{ font-size:24px; margin:0 0 2px; overflow-wrap:anywhere; }
   .detail-head .client{ font-size:15px; color:var(--text-muted); margin-bottom:10px; }
   .mls-line{ font-size:13px; color:var(--text-muted); margin:-6px 0 10px; }
 
   .status-select{ width:auto; display:inline-block; font-size:14px; font-weight:700; padding:5px 10px; border-radius:20px; border:1px solid var(--border); margin-bottom:14px; }
+  .status-row{
+    display:flex; flex-wrap:wrap; align-items:center; gap:8px 12px;
+    margin-bottom:14px; min-width:0;
+  }
+  .status-row .status-select{ margin-bottom:0; }
+  #fell-through-btn{ max-width:100%; }
 
   .key-dates{
-    display:flex; gap:10px; flex-wrap:wrap; background:var(--surface); border:1px solid var(--border);
+    display:grid;
+    grid-template-columns:repeat(3, minmax(0, 1fr));
+    align-items:stretch;
+    gap:10px;
+    background:var(--surface); border:1px solid var(--border);
     border-radius:10px; padding:12px; margin-bottom:6px;
+    min-width:0;
   }
-  .key-date-field{ flex:1; min-width:110px; }
-  .key-date-field label{ margin-bottom:3px; }
-  .key-date-field input{ font-size:15px; padding:8px 10px; }
+  .key-dates.key-dates-buyer{ grid-template-columns:repeat(2, minmax(0, 1fr)); }
+  .key-date-field{
+    display:flex;
+    flex-direction:column;
+    min-width:0;
+  }
+  .key-date-field label{
+    margin-bottom:3px;
+    min-height:2.75em;
+    display:flex;
+    align-items:flex-end;
+    line-height:1.25;
+    overflow-wrap:anywhere;
+  }
+  .key-date-field input{ width:100%; min-width:0; font-size:15px; padding:8px 10px; }
   .add-cal-link{ display:block; font-size:13px; color:var(--accent-dark); margin-top:4px; text-decoration:none; }
+  /* Keep an empty calendar-link row so a missing date does not lift that column */
+  .key-dates .add-cal-link{
+    min-height:1.4em;
+    line-height:1.4em;
+  }
+  .key-dates .add-cal-link.hidden{
+    display:block !important;
+    visibility:hidden;
+    pointer-events:none;
+  }
+  @media (max-width:420px){
+    .key-date-field label{ min-height:3.75em; }
+  }
   .key-dates-hint{ font-size:14px; color:var(--text-muted); margin:6px 0 18px; }
 
   .qs-card{
@@ -260,6 +332,28 @@
   .qs-grid{ display:grid; grid-template-columns:1fr 1fr; gap:10px 12px; margin-bottom:14px; }
   .qs-field label{ margin-bottom:3px; }
   .qs-field input{ font-size:15px; padding:8px 10px; }
+  .qs-comm-dollars{
+    margin-top:4px; font-size:15px; font-weight:700; color:var(--accent-dark);
+    overflow-wrap:anywhere;
+  }
+
+  .ytd-tally{
+    background:var(--surface); border:1px solid var(--border); border-radius:12px;
+    padding:12px 14px; margin-bottom:14px; min-width:0;
+  }
+  .ytd-tally-title{
+    font-family:'Fraunces',serif; font-size:16px; font-weight:600; margin-bottom:8px;
+  }
+  .ytd-tally-grid{
+    display:grid; grid-template-columns:1fr 1fr 1fr; gap:8px;
+    min-width:0;
+  }
+  @media (max-width:340px){
+    .ytd-tally-grid{ grid-template-columns:1fr 1fr; }
+  }
+  .ytd-stat{ min-width:0; }
+  .ytd-stat-label{ display:block; font-size:12px; font-weight:600; color:var(--text-muted); text-transform:uppercase; letter-spacing:.03em; }
+  .ytd-stat-val{ display:block; font-size:17px; font-weight:700; color:var(--accent-dark); overflow-wrap:anywhere; }
   .qs-milestone-row{
     display:flex; align-items:center; gap:10px; padding:8px 0; border-top:1px solid var(--border);
   }
@@ -268,6 +362,63 @@
   .qs-milestone-label{ font-size:16px; flex:1; }
   .qs-milestone-label.done{ text-decoration:line-through; color:var(--text-muted); }
   .qs-milestone-sub{ font-size:13px; color:var(--text-muted); }
+
+  .qs-diligence{
+    border-top:1px solid var(--border);
+    padding-top:12px;
+    margin-top:12px;
+    min-width:0;
+  }
+  .qs-diligence-grid{
+    display:grid;
+    grid-template-columns:1fr 1fr;
+    gap:10px 12px;
+    min-width:0;
+  }
+  @media (max-width:360px){
+    .qs-diligence-grid{ grid-template-columns:1fr; }
+  }
+  .qs-diligence-field{ min-width:0; }
+  .qs-diligence-field label{
+    margin-bottom:3px;
+    overflow-wrap:anywhere;
+  }
+  .qs-diligence-field input[type=date]{ width:100%; min-width:0; font-size:15px; padding:8px 10px; }
+  .qs-diligence-add-all{
+    background:none; border:none; padding:0; cursor:pointer;
+    font-size:13px; font-weight:600; font-family:inherit; color:var(--accent-dark);
+    text-align:left;
+  }
+  .qs-diligence-add-all:disabled{ opacity:.45; cursor:default; }
+
+  .deal-docs-actions{
+    display:flex; flex-wrap:wrap; gap:8px; margin-bottom:12px;
+  }
+  .deal-docs-actions button{ flex:1 1 140px; min-width:0; }
+  .deal-docs-hidden-input{
+    position:absolute; width:1px; height:1px; padding:0; margin:-1px;
+    overflow:hidden; clip:rect(0,0,0,0); border:0;
+  }
+  .deal-docs-list{ display:flex; flex-direction:column; gap:8px; min-width:0; }
+  .deal-doc-row{
+    display:flex; align-items:center; gap:10px;
+    background:var(--bg); border-radius:10px; padding:8px 10px;
+    min-width:0;
+  }
+  .deal-doc-thumb{
+    width:52px; height:52px; border-radius:8px; object-fit:cover;
+    background:#fff; flex-shrink:0;
+  }
+  .deal-doc-icon{
+    width:52px; height:52px; border-radius:8px; background:#fff;
+    display:flex; align-items:center; justify-content:center;
+    font-size:11px; font-weight:700; color:var(--accent-dark);
+    flex-shrink:0; letter-spacing:.02em;
+  }
+  .deal-doc-meta{ flex:1; min-width:0; cursor:pointer; }
+  .deal-doc-name{ font-size:15px; font-weight:600; overflow-wrap:anywhere; }
+  .deal-doc-sub{ font-size:13px; color:var(--text-muted); }
+  .deal-docs-status{ font-size:15px; color:var(--text-muted); padding:8px 0; }
 
   .phase-lock-note{ font-size:14px; color:var(--text-muted); font-style:italic; }
   details.phase.locked summary{ opacity:.75; }
@@ -280,9 +431,10 @@
   }
   details.phase summary{
     list-style:none; cursor:pointer; padding:13px 16px; display:flex; align-items:center; justify-content:space-between;
+    gap:8px; min-width:0;
   }
   details.phase summary::-webkit-details-marker{ display:none; }
-  .phase-left{ display:flex; align-items:center; gap:10px; }
+  .phase-left{ display:flex; align-items:center; gap:10px; min-width:0; flex:1; }
   .keytag{
     position:relative; background:var(--accent); color:#fff; font-family:'Fraunces',serif;
     font-weight:600; font-size:15px; padding:4px 10px 4px 20px; border-radius:4px; white-space:nowrap;
@@ -291,7 +443,7 @@
     content:''; position:absolute; left:7px; top:50%; transform:translateY(-50%);
     width:6px; height:6px; border-radius:50%; background:var(--bg);
   }
-  .phase-name{ font-size:17px; font-weight:600; }
+  .phase-name{ font-size:17px; font-weight:600; overflow-wrap:anywhere; }
   .phase-count{ font-size:14px; color:var(--text-muted); }
   .chev{ transition:transform .15s; color:var(--text-muted); }
   details[open] .chev{ transform:rotate(180deg); }
@@ -328,7 +480,7 @@
   }
   .checkbox.checked{ background:var(--success); border-color:var(--success); color:#fff; font-size:17px; }
   .task-body{ flex:1; min-width:0; }
-  .task-text{ font-size:17px; margin-bottom:8px; }
+  .task-text{ font-size:17px; margin-bottom:8px; overflow-wrap:anywhere; }
   .task-meta{ display:flex; flex-wrap:wrap; gap:6px; align-items:center; }
   .task-meta select, .task-meta input[type=date]{
     font-size:14px; padding:4px 8px; border-radius:6px; width:auto;
@@ -353,7 +505,7 @@
   .add-task-row{ padding:12px 16px; }
   .add-task-row input{ margin-bottom:8px; }
 
-  .qs-title-row{ display:flex; align-items:center; justify-content:space-between; margin-bottom:12px; }
+  .qs-title-row{ display:flex; align-items:center; justify-content:space-between; gap:8px; flex-wrap:wrap; margin-bottom:12px; }
   .qs-title-row .qs-title{ margin-bottom:0; }
   button.secondary.small{ padding:6px 10px; font-size:14px; width:auto; }
 
@@ -403,7 +555,7 @@
     background:var(--bg); color:var(--accent-dark); padding:3px 8px; border-radius:20px; white-space:nowrap;
   }
   .contact-info{ flex:1; min-width:0; }
-  .contact-name{ font-size:17px; font-weight:600; }
+  .contact-name{ font-size:17px; font-weight:600; overflow-wrap:anywhere; }
   .contact-sub{ font-size:14px; color:var(--text-muted); }
   .contacts-empty{ font-size:15px; color:var(--text-muted); padding:6px 0; }
 
@@ -443,15 +595,16 @@
   }
   .modal{
     background:var(--surface); border-radius:16px 16px 0 0; padding:22px 20px 26px;
-    width:100%; max-width:480px;
+    width:100%; max-width:min(480px,100%);
+    min-width:0;
   }
   @media (min-width:520px){
     .modal-backdrop{ align-items:center; }
     .modal{ border-radius:16px; }
   }
   .modal h2{ font-size:21px; margin:0 0 16px; }
-  .modal-actions{ display:flex; gap:10px; margin-top:6px; }
-  .modal-actions button{ flex:1; }
+  .modal-actions{ display:flex; flex-wrap:wrap; gap:10px; margin-top:6px; }
+  .modal-actions button{ flex:1; min-width:0; }
 </style>
 </head>
 <body>
@@ -522,6 +675,7 @@
       <div class="list-header">
         <h1>Transactions</h1>
       </div>
+      <div id="ytd-tally" class="ytd-tally"></div>
       <input type="text" id="txn-search" class="search-input" placeholder="Search by address or client..." />
       <div class="filter-tabs">
         <button class="filter-tab active" data-filter="active">Active</button>
@@ -554,9 +708,12 @@
         </div>
         <div class="client" id="detail-client"></div>
         <div class="mls-line" id="detail-mls"></div>
-        <select class="status-select" id="detail-status"></select>
-        <div class="key-dates">
-          <div class="key-date-field">
+        <div class="status-row">
+          <select class="status-select" id="detail-status"></select>
+          <button type="button" class="secondary small hidden" id="fell-through-btn">Deal fell through — back to Active</button>
+        </div>
+        <div class="key-dates" id="deal-key-dates">
+          <div class="key-date-field" id="key-listing-field">
             <label>Listing (Go-Live) Date</label>
             <input type="date" id="key-listing-date" />
             <a href="#" id="cal-listing" class="add-cal-link hidden" target="_blank">📅 Add to Calendar</a>
@@ -588,12 +745,13 @@
             <input type="text" id="qs-opp-agent" autocomplete="off" />
             <div id="opp-agent-suggestions" class="dir-suggest-box"></div>
           </div>
-          <div class="qs-field"><label>BAC</label><input type="text" id="qs-bac" placeholder="e.g. 3%" /></div>
+          <div class="qs-field"><label>BAC</label><input type="text" id="qs-bac" placeholder="e.g. 3%" /><div class="qs-comm-dollars hidden" id="qs-bac-dollars"></div></div>
           <div class="qs-field"><label>Bedrooms</label><input type="number" id="qs-bedrooms" min="0" /></div>
           <div class="qs-field"><label>Bathrooms</label><input type="number" id="qs-bathrooms" min="0" step="0.5" /></div>
           <div class="qs-field"><label>Sq Ft</label><input type="number" id="qs-sqft" min="0" /></div>
           <div class="qs-field" style="grid-column:1/-1;"><label>Primary Photo URL</label><input type="text" id="qs-photo-url" placeholder="Paste a link to the main listing photo" /></div>
-          <div class="qs-field" style="grid-column:1/-1;"><label>Agent Commission Note</label><input type="text" id="qs-agent-comm" /></div>
+          <div class="qs-field" style="grid-column:1/-1;"><label>Agent Commission Note</label><input type="text" id="qs-agent-comm" /><div class="qs-comm-dollars hidden" id="qs-note-dollars"></div></div>
+          <div class="qs-field" style="grid-column:1/-1;"><label>Transaction fee</label><input type="text" id="qs-txn-fee" inputmode="decimal" placeholder="$" /></div>
         </div>
 
         <label class="checkbox-label"><input type="checkbox" id="qs-do-not-solicit" /> Do not solicit reviews for this client</label>
@@ -606,7 +764,28 @@
           <button class="secondary" id="add-client-btn" style="width:100%;margin-top:8px;">+ Add Client</button>
         </div>
 
+        <div id="qs-diligence" class="qs-diligence hidden">
+          <div class="qs-title-row">
+            <div class="qs-title" style="font-size:14px;">Due Diligence</div>
+            <button type="button" class="qs-diligence-add-all hidden" id="qs-diligence-add-all">📅 Add these to Google Calendar</button>
+          </div>
+          <div id="qs-diligence-fields" class="qs-diligence-grid"></div>
+        </div>
+
         <div id="qs-milestones"></div>
+      </div>
+
+      <div class="qs-card" id="deal-docs-card">
+        <div class="qs-title">Documents</div>
+        <div class="deal-docs-actions">
+          <button type="button" class="secondary" id="deal-docs-photo-btn">Take photo</button>
+          <button type="button" class="secondary" id="deal-docs-upload-btn">Upload or screenshot</button>
+        </div>
+        <input type="file" id="deal-docs-camera" class="deal-docs-hidden-input" accept="image/*" capture="environment" />
+        <input type="file" id="deal-docs-file" class="deal-docs-hidden-input" accept="image/*,application/pdf" multiple />
+        <div id="deal-docs-status" class="deal-docs-status hidden"></div>
+        <div id="deal-docs-list" class="deal-docs-list"></div>
+        <div id="deal-docs-empty" class="contacts-empty hidden">No documents yet. Take a photo or upload a file.</div>
       </div>
 
       <div class="qs-card">
@@ -878,7 +1057,18 @@ let currentTasks = [];
 let currentTxn = null;
 let directoryCache = [];
 let viewingAsId = null;
+let diligenceBackfilledFor = null;
 const STANDARD_ROLES = ['Attorney','Opposing Agent','Lender','Title Company','Home Inspector','Insurance Agent','Appraiser'];
+
+// Diligence deadlines live on transaction_tasks (summary_label / task_text +
+// anchor_type/offset_days). No extra columns on transactions.
+const DILIGENCE_FIELDS = [
+  { key:'inspection', label:'Inspections / Due Diligence', summaryLabels:['Due Diligence'], taskTexts:['Schedule inspections'], fallbackOffset:5 },
+  { key:'title', label:'Title', summaryLabels:['Title'], taskTexts:[], fallbackOffset:2 },
+  { key:'appraisal', label:'Appraisal', summaryLabels:['Appraisal'], taskTexts:[], fallbackOffset:7 },
+  { key:'concessions', label:'Concessions', summaryLabels:['Concessions'], taskTexts:[], fallbackOffset:12 },
+];
+const DILIGENCE_SUMMARY_SET = new Set(DILIGENCE_FIELDS.flatMap(f => f.summaryLabels.map(s => s.toLowerCase())));
 
 // Contact Picker API — only available in Chrome on Android as of this
 // writing. Not supported in Safari/iOS at all. We feature-detect and
@@ -912,6 +1102,9 @@ const STATUSES = [
   ['pre_listing','Pre-Listing'],['active','Active'],['under_contract','Under Contract'],
   ['closed','Closed'],['cancelled','Cancelled']
 ];
+
+const LATER_PHASE_NAMES = ['under contract', 'closing prep', 'post-closing'];
+const FELL_THROUGH_CONFIRM = 'This deal fell through. Remove under-contract / closing tasks and keep listing (or buyer search) tasks?';
 
 function $(id){ return document.getElementById(id); }
 
@@ -1082,11 +1275,11 @@ async function loadMyTasks(){
     .in('transaction_id', txnIds);
 
   const mine = (allTasks || []).filter(t =>
-    t.assignee_id === (viewingAsId || currentMember.id) && t.status !== 'done'
+    t.assignee_id === (viewingAsId || currentMember.id) && t.status !== 'done' && !isUnderContractGbpTask(t)
   );
 
   // Badge always reflects the logged-in person's own actionable (open) tasks
-  const myOwn = (allTasks || []).filter(t => t.assignee_id === currentMember.id && t.status === 'open');
+  const myOwn = (allTasks || []).filter(t => t.assignee_id === currentMember.id && t.status === 'open' && !isUnderContractGbpTask(t));
   const todayForBadge = new Date(); todayForBadge.setHours(0,0,0,0);
   const ownBadgeCount = myOwn.filter(t => t.flagged || (t.due_date && new Date(t.due_date+'T00:00:00') <= todayForBadge)).length;
   const badgeEl = $('mine-badge');
@@ -1145,7 +1338,6 @@ async function loadMyTasks(){
       checkbox.className = 'checkbox';
       checkbox.addEventListener('click', async (e) => {
         e.stopPropagation();
-        if (!confirm(`Mark this complete?\n\n"${task.task_text}"`)) return;
         await completeTask(task);
         await loadMyTasks();
       });
@@ -1288,6 +1480,7 @@ async function loadTransactions(){
   const { data: transactions, error } = await db.from('transactions').select('*').order('created_at', { ascending:false });
   if (error) { console.error(error); return; }
   txnCache = transactions || [];
+  renderYtdTally();
 
   const ids = txnCache.map(t => t.id);
   const { data: allTasks } = ids.length
@@ -1405,6 +1598,7 @@ $('back-btn').addEventListener('click', showList);
 
 async function openTransaction(id, focusTaskId){
   currentTxnId = id;
+  diligenceBackfilledFor = null;
   $('list-view').classList.add('hidden');
   $('my-tasks-view').classList.add('hidden');
   $('directory-view').classList.add('hidden');
@@ -1423,23 +1617,28 @@ async function openTransaction(id, focusTaskId){
   sel.onchange = async () => {
     const oldStatus = t.status;
     const newStatus = sel.value;
-    await db.from('transactions').update({ status: newStatus }).eq('id', id);
-    t.status = newStatus;
-    if (oldStatus !== newStatus && (newStatus === 'under_contract' || newStatus === 'closed')) {
-      sendClientMilestoneEmail(newStatus, id, t.property_address);
-    }
-    // GBP post task for Dawn — separate from client emails, fires on
-    // active/under_contract/closed regardless of side
-    if (oldStatus !== newStatus) {
-      const GBP_STATUS_MAP = { active: 'new_listing', under_contract: 'under_contract', closed: 'just_sold' };
-      if (GBP_STATUS_MAP[newStatus]) {
-        createGbpTask(GBP_STATUS_MAP[newStatus], id, t.property_address, t);
+    if (oldStatus === newStatus) return;
+    if (oldStatus === 'under_contract' && newStatus === 'active') {
+      if (!confirm(FELL_THROUGH_CONFIRM)) {
+        sel.value = oldStatus;
+        return;
       }
+      await resetFellThroughDeal(t);
+      return;
     }
+    await applyStatusSideEffects(t, oldStatus, newStatus);
+  };
+  updateFellThroughButton();
+  $('fell-through-btn').onclick = async () => {
+    if (t.status !== 'under_contract') return;
+    if (!confirm(FELL_THROUGH_CONFIRM)) return;
+    await resetFellThroughDeal(t);
   };
 
-  // Buyer-side deals have no listing date
-  $('key-listing-date').parentElement.style.display = (t.side === 'buyer') ? 'none' : '';
+  // Buyer-side deals have no listing date — keep a 2-column grid so Contract/Closing stay aligned
+  const hideListing = t.side === 'buyer';
+  $('key-listing-field').style.display = hideListing ? 'none' : '';
+  $('deal-key-dates').classList.toggle('key-dates-buyer', hideListing);
 
   $('key-listing-date').value = t.listing_date || '';
   $('key-contract-date').value = t.contract_date || '';
@@ -1456,6 +1655,7 @@ async function openTransaction(id, focusTaskId){
   $('qs-opp-agent').value = t.opposing_agent ?? '';
   $('qs-bac').value = t.buyer_agent_commission ?? '';
   $('qs-agent-comm').value = t.agent_commission_note ?? '';
+  $('qs-txn-fee').value = t.transaction_fee ?? '';
   $('qs-bedrooms').value = t.list_bedrooms ?? '';
   $('qs-bathrooms').value = t.list_bathrooms ?? '';
   $('qs-sqft').value = t.list_sqft ?? '';
@@ -1467,11 +1667,19 @@ async function openTransaction(id, focusTaskId){
     const oldVal = currentTxn.list_price;
     saveDealField('list_price', newVal);
     currentTxn.list_price = newVal;
+    refreshCommissionDollars();
     if (currentTxn.status === 'active' && newVal !== oldVal && newVal !== null) {
       createGbpTask('price_change', currentTxnId, currentTxn.property_address);
     }
   };
-  $('qs-sale-price').onchange = () => saveDealField('sale_price', numOrNull($('qs-sale-price').value));
+  $('qs-sale-price').onchange = () => {
+    const v = numOrNull($('qs-sale-price').value);
+    saveDealField('sale_price', v);
+    currentTxn.sale_price = v;
+    refreshCommissionDollars();
+  };
+  $('qs-list-price').oninput = refreshCommissionDollars;
+  $('qs-sale-price').oninput = refreshCommissionDollars;
   $('qs-opp-agent').onchange = () => saveDealField('opposing_agent', $('qs-opp-agent').value || null);
 
   $('qs-opp-agent').oninput = () => {
@@ -1499,17 +1707,31 @@ async function openTransaction(id, focusTaskId){
   $('qs-opp-agent').addEventListener('blur', () => {
     setTimeout(() => { $('opp-agent-suggestions').innerHTML = ''; }, 150);
   });
-  $('qs-bac').onchange = () => saveDealField('buyer_agent_commission', $('qs-bac').value || null);
-  $('qs-agent-comm').onchange = () => saveDealField('agent_commission_note', $('qs-agent-comm').value || null);
+  $('qs-bac').onchange = () => {
+    saveDealField('buyer_agent_commission', $('qs-bac').value || null);
+    if (currentTxn) currentTxn.buyer_agent_commission = $('qs-bac').value || null;
+    refreshCommissionDollars();
+  };
+  $('qs-agent-comm').onchange = () => {
+    saveDealField('agent_commission_note', $('qs-agent-comm').value || null);
+    if (currentTxn) currentTxn.agent_commission_note = $('qs-agent-comm').value || null;
+    refreshCommissionDollars();
+  };
+  $('qs-bac').oninput = refreshCommissionDollars;
+  $('qs-agent-comm').oninput = refreshCommissionDollars;
+  $('qs-txn-fee').onchange = () => saveDealField('transaction_fee', $('qs-txn-fee').value || null);
   $('qs-bedrooms').onchange = () => saveDealField('list_bedrooms', $('qs-bedrooms').value ? parseInt($('qs-bedrooms').value) : null);
   $('qs-bathrooms').onchange = () => saveDealField('list_bathrooms', $('qs-bathrooms').value ? parseFloat($('qs-bathrooms').value) : null);
   $('qs-sqft').onchange = () => saveDealField('list_sqft', $('qs-sqft').value ? parseInt($('qs-sqft').value) : null);
   $('qs-photo-url').onchange = () => saveDealField('primary_photo_url', $('qs-photo-url').value || null);
   $('qs-do-not-solicit').onchange = () => saveDealField('do_not_solicit', $('qs-do-not-solicit').checked);
 
+  refreshCommissionDollars();
+
   await loadTasks();
   await loadContacts();
   await loadClients();
+  await loadDealDocuments();
 
   if (focusTaskId) focusOnTask(focusTaskId);
 }
@@ -1639,6 +1861,166 @@ async function syncClientNameSummary(){
   currentTxn.client_name = summary;
   $('detail-client').textContent = summary;
 }
+
+// ---------------- DEAL DOCUMENTS ----------------
+// Bucket deal-docs + txn.deal_documents are created on project
+// nmttottwzbxumsmqligf. If they are not visible yet, show "Documents not ready".
+function isDealDocsUnavailable(error){
+  if (!error) return false;
+  const msg = `${error.message || ''} ${error.code || ''} ${error.details || ''}`;
+  return /deal_documents|deal-docs|42P01|PGRST205|schema cache|does not exist|not found/i.test(msg);
+}
+
+function formatDocUploadedAt(iso){
+  if (!iso) return '';
+  const d = new Date(iso);
+  if (isNaN(d.getTime())) return '';
+  return d.toLocaleDateString('en-US', { month:'numeric', day:'numeric', year:'2-digit' });
+}
+
+function safeDealDocName(name){
+  const base = String(name || 'file').replace(/^.*[\\/]/, '');
+  const cleaned = base.replace(/[^a-zA-Z0-9._-]+/g, '_').replace(/^_+|_+$/g, '');
+  return (cleaned || 'file').slice(0, 80);
+}
+
+function setDealDocsStatus(text){
+  const el = $('deal-docs-status');
+  if (!text) { el.classList.add('hidden'); el.textContent = ''; return; }
+  el.textContent = text;
+  el.classList.remove('hidden');
+}
+
+async function loadDealDocuments(){
+  const list = $('deal-docs-list');
+  const empty = $('deal-docs-empty');
+  list.innerHTML = '';
+  empty.classList.add('hidden');
+  setDealDocsStatus('');
+  if (!currentTxnId) return;
+
+  const { data, error } = await db.from('deal_documents')
+    .select('*')
+    .eq('transaction_id', currentTxnId)
+    .order('created_at', { ascending: false });
+
+  if (error) {
+    setDealDocsStatus(isDealDocsUnavailable(error) ? 'Documents not ready' : error.message);
+    return;
+  }
+
+  if (!data || data.length === 0) {
+    empty.classList.remove('hidden');
+    return;
+  }
+
+  data.forEach(doc => list.appendChild(renderDealDocRow(doc)));
+}
+
+function renderDealDocRow(doc){
+  const row = document.createElement('div');
+  row.className = 'deal-doc-row';
+
+  const isImage = String(doc.mime_type || '').startsWith('image/');
+  if (isImage) {
+    const img = document.createElement('img');
+    img.className = 'deal-doc-thumb';
+    img.alt = '';
+    img.referrerPolicy = 'no-referrer';
+    row.appendChild(img);
+    sbRoot.storage.from('deal-docs').createSignedUrl(doc.storage_path, 3600).then(({ data }) => {
+      if (data && data.signedUrl) img.src = data.signedUrl;
+    }).catch(() => {});
+  } else {
+    const icon = document.createElement('div');
+    icon.className = 'deal-doc-icon';
+    icon.textContent = /pdf/i.test(doc.mime_type || doc.file_name || '') ? 'PDF' : 'FILE';
+    row.appendChild(icon);
+  }
+
+  const meta = document.createElement('div');
+  meta.className = 'deal-doc-meta';
+  meta.innerHTML = `
+    <div class="deal-doc-name">${escapeHtml(doc.file_name || 'Untitled')}</div>
+    <div class="deal-doc-sub">${escapeHtml(formatDocUploadedAt(doc.created_at))}</div>
+  `;
+  meta.addEventListener('click', () => openDealDocument(doc));
+
+  const del = document.createElement('button');
+  del.className = 'del-btn';
+  del.type = 'button';
+  del.textContent = '✕';
+  del.title = 'Delete document';
+  del.addEventListener('click', async (e) => {
+    e.stopPropagation();
+    if (!confirm(`Delete "${doc.file_name || 'this file'}"?`)) return;
+    await deleteDealDocument(doc);
+  });
+
+  row.appendChild(meta);
+  row.appendChild(del);
+  return row;
+}
+
+async function openDealDocument(doc){
+  const { data, error } = await sbRoot.storage.from('deal-docs').createSignedUrl(doc.storage_path, 3600);
+  if (error || !data || !data.signedUrl) {
+    setDealDocsStatus(isDealDocsUnavailable(error) ? 'Documents not ready' : ((error && error.message) || 'Could not open file.'));
+    return;
+  }
+  window.open(data.signedUrl, '_blank', 'noopener');
+}
+
+async function deleteDealDocument(doc){
+  await sbRoot.storage.from('deal-docs').remove([doc.storage_path]);
+  const { error } = await db.from('deal_documents').delete().eq('id', doc.id);
+  if (error) {
+    setDealDocsStatus(isDealDocsUnavailable(error) ? 'Documents not ready' : error.message);
+    return;
+  }
+  await loadDealDocuments();
+}
+
+async function uploadDealDoc(file){
+  if (!file || !currentTxnId || !currentMember) return;
+  setDealDocsStatus('Uploading…');
+  const id = (crypto.randomUUID && crypto.randomUUID()) || String(Date.now()) + '-' + Math.random().toString(16).slice(2);
+  const path = `${currentTxnId}/${id}-${safeDealDocName(file.name)}`;
+  const { error: upErr } = await sbRoot.storage.from('deal-docs').upload(path, file, {
+    contentType: file.type || 'application/octet-stream',
+    upsert: false
+  });
+  if (upErr) {
+    setDealDocsStatus(isDealDocsUnavailable(upErr) ? 'Documents not ready' : upErr.message);
+    return;
+  }
+  const { error: rowErr } = await db.from('deal_documents').insert({
+    transaction_id: currentTxnId,
+    storage_path: path,
+    file_name: file.name || 'file',
+    mime_type: file.type || null,
+    file_size: file.size || null,
+    uploaded_by: currentMember.user_id || currentMember.id
+  });
+  if (rowErr) {
+    setDealDocsStatus(isDealDocsUnavailable(rowErr) ? 'Documents not ready' : rowErr.message);
+    return;
+  }
+  await loadDealDocuments();
+}
+
+$('deal-docs-photo-btn').addEventListener('click', () => $('deal-docs-camera').click());
+$('deal-docs-upload-btn').addEventListener('click', () => $('deal-docs-file').click());
+$('deal-docs-camera').addEventListener('change', async (e) => {
+  const files = [...(e.target.files || [])];
+  e.target.value = '';
+  for (const f of files) await uploadDealDoc(f);
+});
+$('deal-docs-file').addEventListener('change', async (e) => {
+  const files = [...(e.target.files || [])];
+  e.target.value = '';
+  for (const f of files) await uploadDealDoc(f);
+});
 
 // ---------------- CONTACTS ----------------
 let contactsCache = [];
@@ -1893,15 +2275,22 @@ $('dir-delete-btn').addEventListener('click', async () => {
   renderDirectoryList();
 });
 
-function updateCalendarLink(linkId, dateVal, title){
-  const el = $(linkId);
-  if (!dateVal) { el.classList.add('hidden'); return; }
-  el.classList.remove('hidden');
+function addDaysYmd(ymd, days){
+  const d = new Date(ymd + 'T00:00:00');
+  d.setDate(d.getDate() + days);
+  const y = d.getFullYear();
+  const m = String(d.getMonth()+1).padStart(2,'0');
+  const day = String(d.getDate()).padStart(2,'0');
+  return `${y}-${m}-${day}`;
+}
 
+function googleCalUrl(dateVal, title){
+  if (!dateVal) return '';
   const d = new Date(dateVal + 'T00:00:00');
   const next = new Date(d.getTime() + 86400000);
   const fmt = (x) => x.toISOString().slice(0,10).replace(/-/g,'');
-  const guests = teamMembers.filter(m => m.id !== currentMember.id).map(m => m.email).filter(Boolean).join(',');
+  const guests = (currentMember ? teamMembers.filter(m => m.id !== currentMember.id) : teamMembers)
+    .map(m => m.email).filter(Boolean).join(',');
 
   const params = new URLSearchParams({
     action: 'TEMPLATE',
@@ -1911,6 +2300,15 @@ function updateCalendarLink(linkId, dateVal, title){
   });
   let url = `https://calendar.google.com/calendar/render?${params.toString()}`;
   if (guests) url += `&add=${encodeURIComponent(guests)}`;
+  return url;
+}
+
+function updateCalendarLink(linkId, dateVal, title){
+  const el = $(linkId);
+  if (!el) return;
+  const url = googleCalUrl(dateVal, title);
+  if (!url) { el.classList.add('hidden'); return; }
+  el.classList.remove('hidden');
   el.href = url;
 }
 
@@ -1922,23 +2320,393 @@ function refreshAllCalendarLinks(){
 }
 
 async function saveKeyDate(column, value){
-  await db.from('transactions').update({ [column]: value || null }).eq('id', currentTxnId);
+  const next = value || null;
+  await db.from('transactions').update({ [column]: next }).eq('id', currentTxnId);
+  if (currentTxn) currentTxn[column] = next;
   await db.rpc('recalc_transaction_due_dates', { p_transaction_id: currentTxnId });
+  if (column === 'contract_date') diligenceBackfilledFor = null;
   await loadTasks();
   refreshAllCalendarLinks();
 }
 
 function numOrNull(v){
+  if (v === null || v === undefined || v === '') return null;
+  if (typeof v === 'number') return isNaN(v) ? null : v;
   const n = parseFloat(String(v).replace(/[^0-9.]/g, ''));
   return isNaN(n) ? null : n;
+}
+
+function isCleanCommissionText(raw){
+  return /^\s*\$?\s*[\d,]+(\.\d+)?\s*%?\s*$/.test(String(raw || ''));
+}
+
+function parseCommissionInput(raw){
+  const s = String(raw == null ? '' : raw).trim();
+  if (!s) return { kind: 'empty' };
+  const n = parseFloat(s.replace(/[^0-9.]/g, ''));
+  if (isNaN(n)) return { kind: 'empty' };
+  const hasPct = /%/.test(s);
+  const hasDollar = /\$/.test(s);
+  if (hasDollar && !hasPct) return { kind: 'dollars', value: n };
+  if (hasPct) return { kind: 'percent', value: n };
+  if (n <= 15) return { kind: 'percent', value: n };
+  return { kind: 'dollars', value: n };
+}
+
+function dealVolume(txn){
+  const sale = numOrNull(txn && txn.sale_price);
+  if (sale != null) return sale;
+  return numOrNull(txn && txn.list_price);
+}
+
+function commissionDollars(raw, price){
+  const parsed = parseCommissionInput(raw);
+  if (parsed.kind === 'empty') return null;
+  if (parsed.kind === 'dollars') return parsed.value;
+  if (price == null) return null;
+  return price * (parsed.value / 100);
+}
+
+function dealGci(txn){
+  const price = dealVolume(txn);
+  const bac = commissionDollars(txn && txn.buyer_agent_commission, price);
+  if (bac != null) return bac;
+  if (isCleanCommissionText(txn && txn.agent_commission_note)) {
+    return commissionDollars(txn.agent_commission_note, price);
+  }
+  return null;
+}
+
+function formatCommissionMoney(n){
+  if (n === null || n === undefined || n === '') return '';
+  const rounded = Math.round(Number(n) * 100) / 100;
+  if (isNaN(rounded)) return '';
+  const opts = Number.isInteger(rounded)
+    ? { maximumFractionDigits: 0 }
+    : { minimumFractionDigits: 2, maximumFractionDigits: 2 };
+  return '$' + rounded.toLocaleString('en-US', opts);
+}
+
+function setCommDollarsEl(id, amount, label){
+  const el = $(id);
+  if (!el) return;
+  if (amount == null) { el.classList.add('hidden'); el.textContent = ''; return; }
+  el.textContent = (label ? label + ' ' : '') + formatCommissionMoney(amount);
+  el.classList.remove('hidden');
+}
+
+function refreshCommissionDollars(){
+  const price = dealVolume({
+    sale_price: $('qs-sale-price') ? $('qs-sale-price').value : '',
+    list_price: $('qs-list-price') ? $('qs-list-price').value : ''
+  });
+  setCommDollarsEl('qs-bac-dollars', commissionDollars($('qs-bac') ? $('qs-bac').value : '', price));
+  const note = $('qs-agent-comm') ? $('qs-agent-comm').value : '';
+  const noteAmt = isCleanCommissionText(note) ? commissionDollars(note, price) : null;
+  setCommDollarsEl('qs-note-dollars', noteAmt);
+}
+
+function chicagoCalendarYear(){
+  return Number(new Intl.DateTimeFormat('en-US', { timeZone: 'America/Chicago', year: 'numeric' }).format(new Date()));
+}
+
+function renderYtdTally(){
+  const box = $('ytd-tally');
+  if (!box) return;
+  const year = chicagoCalendarYear();
+  const closed = (txnCache || []).filter(t =>
+    t.status === 'closed' && t.closing_date && String(t.closing_date).slice(0, 4) === String(year)
+  );
+  let volume = 0;
+  let gci = 0;
+  closed.forEach(t => {
+    const vol = dealVolume(t);
+    if (vol != null) volume += vol;
+    const comm = dealGci(t);
+    if (comm != null) gci += comm;
+  });
+  box.innerHTML = `
+    <div class="ytd-tally-title">${year} production</div>
+    <div class="ytd-tally-grid">
+      <div class="ytd-stat"><span class="ytd-stat-label">Volume</span><span class="ytd-stat-val">${formatCommissionMoney(volume) || '$0'}</span></div>
+      <div class="ytd-stat"><span class="ytd-stat-label">GCI</span><span class="ytd-stat-val">${formatCommissionMoney(gci) || '$0'}</span></div>
+      <div class="ytd-stat"><span class="ytd-stat-label">Closed</span><span class="ytd-stat-val">${closed.length}</span></div>
+    </div>
+  `;
 }
 
 async function saveDealField(column, value){
   await db.from('transactions').update({ [column]: value }).eq('id', currentTxnId);
 }
 
+function isLaterPhaseName(name){
+  return LATER_PHASE_NAMES.includes(String(name || '').trim().toLowerCase());
+}
+
+function templateSidesForDeal(side){
+  if (side === 'buyer') return ['buyer'];
+  if (side === 'dual') return ['seller', 'buyer', 'dual_extra'];
+  return ['seller'];
+}
+
+function assigneeForDefaultRole(role){
+  if (!role) return null;
+  if (role === 'agent') {
+    const m = teamMembers.find(x => x.role === 'agent');
+    return (m || currentMember) ? (m || currentMember).id : null;
+  }
+  if (role === 'assistant') {
+    const m = teamMembers.find(x => x.role === 'assistant' || x.role === 'assistant_coordinator');
+    return m ? m.id : null;
+  }
+  if (role === 'coordinator') {
+    const m = teamMembers.find(x => x.role === 'coordinator' || x.role === 'assistant_coordinator');
+    return m ? m.id : null;
+  }
+  return null;
+}
+
+function dueDateFromTemplate(tmpl, txn){
+  const offset = tmpl.offset_days ?? 0;
+  let base = null;
+  if (tmpl.anchor_type === 'contract') base = txn.contract_date;
+  else if (tmpl.anchor_type === 'closing') base = txn.closing_date;
+  else if (tmpl.anchor_type === 'listing') base = txn.listing_date;
+  else if (tmpl.anchor_type === 'creation') base = (txn.created_at || '').slice(0, 10);
+  if (!base) return null;
+  return addDaysYmd(base, offset);
+}
+
+function updateFellThroughButton(){
+  const btn = $('fell-through-btn');
+  if (!btn) return;
+  const show = currentTxn && currentTxn.status === 'under_contract';
+  btn.classList.toggle('hidden', !show);
+}
+
+async function applyStatusSideEffects(txn, oldStatus, newStatus){
+  await db.from('transactions').update({ status: newStatus }).eq('id', txn.id);
+  txn.status = newStatus;
+  if (currentTxn && currentTxn.id === txn.id) currentTxn.status = newStatus;
+  if (oldStatus !== newStatus && (newStatus === 'under_contract' || newStatus === 'closed')) {
+    sendClientMilestoneEmail(newStatus, txn.id, txn.property_address);
+  }
+  if (oldStatus !== newStatus) {
+    const GBP_STATUS_MAP = { active: 'new_listing', closed: 'just_sold' };
+    if (GBP_STATUS_MAP[newStatus]) {
+      createGbpTask(GBP_STATUS_MAP[newStatus], txn.id, txn.property_address, txn);
+    }
+  }
+  if (newStatus === 'under_contract') {
+    await cloneLaterPhasesIfMissing(txn);
+    if (currentTxnId === txn.id) await loadTasks();
+  }
+  updateFellThroughButton();
+}
+
+async function resetFellThroughDeal(txn){
+  const { data: tasks } = await db.from('transaction_tasks').select('id,phase_name').eq('transaction_id', txn.id);
+  const ids = (tasks || []).filter(t => isLaterPhaseName(t.phase_name)).map(t => t.id);
+  if (ids.length) await db.from('transaction_tasks').delete().in('id', ids);
+
+  await db.from('transactions').update({
+    status: 'active',
+    contract_date: null,
+    closing_date: null,
+    sale_price: null
+  }).eq('id', txn.id);
+
+  txn.status = 'active';
+  txn.contract_date = null;
+  txn.closing_date = null;
+  txn.sale_price = null;
+  if (currentTxn && currentTxn.id === txn.id) {
+    currentTxn.status = 'active';
+    currentTxn.contract_date = null;
+    currentTxn.closing_date = null;
+    currentTxn.sale_price = null;
+  }
+
+  $('detail-status').value = 'active';
+  $('key-contract-date').value = '';
+  $('key-closing-date').value = '';
+  $('qs-sale-price').value = '';
+  refreshCommissionDollars();
+  diligenceBackfilledFor = null;
+  refreshAllCalendarLinks();
+  updateFellThroughButton();
+
+  const GBP_STATUS_MAP = { active: 'new_listing' };
+  if (GBP_STATUS_MAP.active) {
+    createGbpTask('new_listing', txn.id, txn.property_address, txn);
+  }
+  if (currentTxnId === txn.id) await loadTasks();
+}
+
+async function cloneLaterPhasesIfMissing(txn){
+  const { data: existing } = await db.from('transaction_tasks').select('id,phase_name').eq('transaction_id', txn.id);
+  if ((existing || []).some(t => isLaterPhaseName(t.phase_name))) return;
+
+  const sides = templateSidesForDeal(txn.side);
+  const { data: templates, error } = await db.from('template_tasks').select('*').in('side', sides).order('phase_number').order('sort_order');
+  if (error) { console.error(error); return; }
+
+  const rows = (templates || []).filter(t => isLaterPhaseName(t.phase_name) && !isUnderContractGbpTask(t)).map(tmpl => {
+    const row = {
+      transaction_id: txn.id,
+      phase_number: tmpl.phase_number,
+      phase_name: tmpl.phase_name,
+      task_text: tmpl.task_text,
+      sort_order: tmpl.sort_order,
+      assignee_id: assigneeForDefaultRole(tmpl.default_role),
+      due_date: dueDateFromTemplate(tmpl, txn),
+      offset_days: tmpl.offset_days ?? 0,
+      anchor_type: tmpl.anchor_type || null,
+    };
+    if (tmpl.summary_label) row.summary_label = tmpl.summary_label;
+    if (tmpl.recurring_days) row.recurring_days = tmpl.recurring_days;
+    return row;
+  });
+  if (rows.length) await db.from('transaction_tasks').insert(rows);
+}
+
+function findDiligenceTask(field, usedIds){
+  const unused = currentTasks.filter(t => !usedIds.has(t.id));
+  const byLabel = unused.find(t => t.summary_label && field.summaryLabels.some(l => String(t.summary_label).toLowerCase() === l.toLowerCase()));
+  if (byLabel) return byLabel;
+  const byExactText = unused.find(t => field.taskTexts.some(tx => String(t.task_text || '').trim().toLowerCase() === tx.toLowerCase()));
+  if (byExactText) return byExactText;
+  if (field.key === 'inspection') {
+    return unused.find(t => /schedule inspections/i.test(t.task_text || ''));
+  }
+  return null;
+}
+
+function diligenceDisplayDate(task){
+  if (!currentTxn || !currentTxn.contract_date) return '';
+  return (task && task.due_date) || '';
+}
+
+function diligenceComputedDate(task, field){
+  const contract = currentTxn && currentTxn.contract_date;
+  if (!contract) return '';
+  const offset = (task && task.offset_days != null) ? task.offset_days : field.fallbackOffset;
+  if (offset == null) return '';
+  return addDaysYmd(contract, offset);
+}
+
+function collectDiligenceRows(){
+  const used = new Set();
+  const rows = [];
+  DILIGENCE_FIELDS.forEach(field => {
+    const task = findDiligenceTask(field, used);
+    if (!task) return;
+    used.add(task.id);
+    rows.push({ field, task, date: diligenceDisplayDate(task) });
+  });
+  return rows;
+}
+
+async function ensureDiligenceDueDates(){
+  const contract = currentTxn && currentTxn.contract_date;
+  if (!contract) return;
+  const used = new Set();
+  const writes = [];
+  DILIGENCE_FIELDS.forEach(field => {
+    const task = findDiligenceTask(field, used);
+    if (!task) return;
+    used.add(task.id);
+    if (task.due_date) return;
+    const due = diligenceComputedDate(task, field);
+    if (!due) return;
+    writes.push(
+      db.from('transaction_tasks').update({ due_date: due }).eq('id', task.id).then(() => {
+        task.due_date = due;
+      })
+    );
+  });
+  if (writes.length) await Promise.all(writes);
+}
+
+function renderDueDiligence(){
+  const wrap = $('qs-diligence');
+  const fields = $('qs-diligence-fields');
+  const addAll = $('qs-diligence-add-all');
+  if (!wrap || !fields) return;
+
+  const rows = collectDiligenceRows();
+  fields.innerHTML = '';
+
+  if (rows.length === 0) {
+    wrap.classList.add('hidden');
+    return;
+  }
+  wrap.classList.remove('hidden');
+
+  const addr = currentTxn ? currentTxn.property_address : '';
+  const calItems = [];
+
+  rows.forEach(({ field, task, date }) => {
+    const cell = document.createElement('div');
+    cell.className = 'qs-diligence-field';
+
+    const lab = document.createElement('label');
+    lab.setAttribute('for', 'dd-' + field.key);
+    lab.textContent = field.label;
+
+    const input = document.createElement('input');
+    input.type = 'date';
+    input.id = 'dd-' + field.key;
+    input.value = date;
+    input.addEventListener('change', async () => {
+      const next = input.value || null;
+      await db.from('transaction_tasks').update({ due_date: next }).eq('id', task.id);
+      task.due_date = next;
+      const t = currentTasks.find(x => x.id === task.id);
+      if (t) t.due_date = next;
+      renderDueDiligence();
+      renderPhases();
+    });
+
+    const cal = document.createElement('a');
+    cal.className = 'add-cal-link' + (date ? '' : ' hidden');
+    cal.target = '_blank';
+    cal.rel = 'noopener';
+    cal.textContent = '📅 Add to Calendar';
+    if (date) {
+      const title = `${field.label}: ${addr}`;
+      const url = googleCalUrl(date, title);
+      cal.href = url;
+      calItems.push({ title, date, url });
+    }
+
+    cell.appendChild(lab);
+    cell.appendChild(input);
+    cell.appendChild(cal);
+    fields.appendChild(cell);
+  });
+
+  if (calItems.length) {
+    addAll.classList.remove('hidden');
+    addAll.disabled = false;
+    addAll.onclick = (e) => {
+      e.preventDefault();
+      calItems.forEach((item, i) => {
+        setTimeout(() => window.open(item.url, '_blank', 'noopener'), i * 350);
+      });
+    };
+  } else {
+    addAll.classList.add('hidden');
+    addAll.disabled = true;
+    addAll.onclick = null;
+  }
+}
+
 function renderQuickStatus(){
-  const milestones = currentTasks.filter(t => t.summary_label).sort((a,b) => a.phase_number - b.phase_number || a.sort_order - b.sort_order);
+  renderDueDiligence();
+  const milestones = currentTasks
+    .filter(t => t.summary_label && !DILIGENCE_SUMMARY_SET.has(String(t.summary_label).toLowerCase()))
+    .sort((a,b) => a.phase_number - b.phase_number || a.sort_order - b.sort_order);
 
   const container = $('qs-milestones');
   container.innerHTML = '';
@@ -2003,7 +2771,11 @@ function renderActivityFeed(){
 async function loadTasks(){
   const scrollY = window.scrollY;
   const { data: tasks } = await db.from('transaction_tasks').select('*').eq('transaction_id', currentTxnId).order('phase_number').order('sort_order');
-  currentTasks = tasks || [];
+  currentTasks = (tasks || []).filter(t => !isUnderContractGbpTask(t));
+  if (currentTxn && currentTxn.contract_date && diligenceBackfilledFor !== currentTxnId) {
+    await ensureDiligenceDueDates();
+    diligenceBackfilledFor = currentTxnId;
+  }
   renderQuickStatus();
   renderPhases();
   renderActivityFeed();
@@ -2259,6 +3031,22 @@ function applyDueStyle(input, task){
 }
 
 // ---------------- GBP POST TASKS (for Dawn) ----------------
+// Under Contract GBP posts are retired: do not create or show them.
+// Existing rows stay in the database; go-live / just-sold / price / open house stay.
+function isGbpPostTaskText(text){
+  const s = String(text || '');
+  return /post\s+to\s+google/i.test(s) || /\bgbp\b/i.test(s) || /google business profile/i.test(s);
+}
+
+function isUnderContractPhase(task){
+  const name = String(task && task.phase_name || '').trim().toLowerCase();
+  return name === 'under contract' || Number(task && task.phase_number) === 6;
+}
+
+function isUnderContractGbpTask(task){
+  return !!(task && isUnderContractPhase(task) && isGbpPostTaskText(task.task_text));
+}
+
 const GBP_PHASE_MAP = {
   new_listing:     { num: 4, name: 'Go Live Day' },
   price_change:    { num: 5, name: 'Ongoing Listing Management' },
@@ -2311,6 +3099,7 @@ function buildGbpPostCopy(type, txn){
 }
 
 async function createGbpTask(type, transactionId, propertyAddress, txnOverride){
+  if (type === 'under_contract') return;
   const txn = txnOverride || currentTxn || {};
   const dawn = teamMembers.find(m => m.role === 'assistant_coordinator')
             || teamMembers.find(m => m.role === 'coordinator')
@@ -2408,7 +3197,6 @@ async function completeTask(task){
 async function toggleTask(task){
   const isDone = task.status === 'done';
   if (!isDone) {
-    if (!confirm(`Mark this complete?\n\n"${task.task_text}"`)) return;
     await completeTask(task);
   } else {
     await db.from('transaction_tasks').update({ status:'open', completed_by:null, completed_at:null }).eq('id', task.id);
@@ -2613,7 +3401,7 @@ function renderTemplateEditor(){
     card.className = 'qs-card';
     card.innerHTML = `<div class="qs-title">${num}. ${escapeHtml(name)}</div>`;
 
-    templateCache.filter(t => t.phase_number === num).forEach(t => {
+    templateCache.filter(t => t.phase_number === num && !isUnderContractGbpTask(t)).forEach(t => {
       card.appendChild(renderTemplateRow(t));
     });
 
