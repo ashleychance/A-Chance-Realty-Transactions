@@ -277,6 +277,12 @@
   .mls-line{ font-size:13px; color:var(--text-muted); margin:-6px 0 10px; }
 
   .status-select{ width:auto; display:inline-block; font-size:14px; font-weight:700; padding:5px 10px; border-radius:20px; border:1px solid var(--border); margin-bottom:14px; }
+  .status-row{
+    display:flex; flex-wrap:wrap; align-items:center; gap:8px 12px;
+    margin-bottom:14px; min-width:0;
+  }
+  .status-row .status-select{ margin-bottom:0; }
+  #fell-through-btn{ max-width:100%; }
 
   .key-dates{
     display:flex; gap:10px; flex-wrap:wrap; background:var(--surface); border:1px solid var(--border);
@@ -620,7 +626,10 @@
         </div>
         <div class="client" id="detail-client"></div>
         <div class="mls-line" id="detail-mls"></div>
-        <select class="status-select" id="detail-status"></select>
+        <div class="status-row">
+          <select class="status-select" id="detail-status"></select>
+          <button type="button" class="secondary small hidden" id="fell-through-btn">Deal fell through — back to Active</button>
+        </div>
         <div class="key-dates">
           <div class="key-date-field">
             <label>Listing (Go-Live) Date</label>
@@ -998,6 +1007,9 @@ const STATUSES = [
   ['pre_listing','Pre-Listing'],['active','Active'],['under_contract','Under Contract'],
   ['closed','Closed'],['cancelled','Cancelled']
 ];
+
+const LATER_PHASE_NAMES = ['under contract', 'closing prep', 'post-closing'];
+const FELL_THROUGH_CONFIRM = 'This deal fell through. Remove under-contract / closing tasks and keep listing (or buyer search) tasks?';
 
 function $(id){ return document.getElementById(id); }
 
@@ -1509,19 +1521,22 @@ async function openTransaction(id, focusTaskId){
   sel.onchange = async () => {
     const oldStatus = t.status;
     const newStatus = sel.value;
-    await db.from('transactions').update({ status: newStatus }).eq('id', id);
-    t.status = newStatus;
-    if (oldStatus !== newStatus && (newStatus === 'under_contract' || newStatus === 'closed')) {
-      sendClientMilestoneEmail(newStatus, id, t.property_address);
-    }
-    // GBP post task for Dawn — separate from client emails, fires on
-    // active/under_contract/closed regardless of side
-    if (oldStatus !== newStatus) {
-      const GBP_STATUS_MAP = { active: 'new_listing', under_contract: 'under_contract', closed: 'just_sold' };
-      if (GBP_STATUS_MAP[newStatus]) {
-        createGbpTask(GBP_STATUS_MAP[newStatus], id, t.property_address, t);
+    if (oldStatus === newStatus) return;
+    if (oldStatus === 'under_contract' && newStatus === 'active') {
+      if (!confirm(FELL_THROUGH_CONFIRM)) {
+        sel.value = oldStatus;
+        return;
       }
+      await resetFellThroughDeal(t);
+      return;
     }
+    await applyStatusSideEffects(t, oldStatus, newStatus);
+  };
+  updateFellThroughButton();
+  $('fell-through-btn').onclick = async () => {
+    if (t.status !== 'under_contract') return;
+    if (!confirm(FELL_THROUGH_CONFIRM)) return;
+    await resetFellThroughDeal(t);
   };
 
   // Buyer-side deals have no listing date
@@ -2042,6 +2057,136 @@ function numOrNull(v){
 
 async function saveDealField(column, value){
   await db.from('transactions').update({ [column]: value }).eq('id', currentTxnId);
+}
+
+function isLaterPhaseName(name){
+  return LATER_PHASE_NAMES.includes(String(name || '').trim().toLowerCase());
+}
+
+function templateSidesForDeal(side){
+  if (side === 'buyer') return ['buyer'];
+  if (side === 'dual') return ['seller', 'buyer', 'dual_extra'];
+  return ['seller'];
+}
+
+function assigneeForDefaultRole(role){
+  if (!role) return null;
+  if (role === 'agent') {
+    const m = teamMembers.find(x => x.role === 'agent');
+    return (m || currentMember) ? (m || currentMember).id : null;
+  }
+  if (role === 'assistant') {
+    const m = teamMembers.find(x => x.role === 'assistant' || x.role === 'assistant_coordinator');
+    return m ? m.id : null;
+  }
+  if (role === 'coordinator') {
+    const m = teamMembers.find(x => x.role === 'coordinator' || x.role === 'assistant_coordinator');
+    return m ? m.id : null;
+  }
+  return null;
+}
+
+function dueDateFromTemplate(tmpl, txn){
+  const offset = tmpl.offset_days ?? 0;
+  let base = null;
+  if (tmpl.anchor_type === 'contract') base = txn.contract_date;
+  else if (tmpl.anchor_type === 'closing') base = txn.closing_date;
+  else if (tmpl.anchor_type === 'listing') base = txn.listing_date;
+  else if (tmpl.anchor_type === 'creation') base = (txn.created_at || '').slice(0, 10);
+  if (!base) return null;
+  return addDaysYmd(base, offset);
+}
+
+function updateFellThroughButton(){
+  const btn = $('fell-through-btn');
+  if (!btn) return;
+  const show = currentTxn && currentTxn.status === 'under_contract';
+  btn.classList.toggle('hidden', !show);
+}
+
+async function applyStatusSideEffects(txn, oldStatus, newStatus){
+  await db.from('transactions').update({ status: newStatus }).eq('id', txn.id);
+  txn.status = newStatus;
+  if (currentTxn && currentTxn.id === txn.id) currentTxn.status = newStatus;
+  if (oldStatus !== newStatus && (newStatus === 'under_contract' || newStatus === 'closed')) {
+    sendClientMilestoneEmail(newStatus, txn.id, txn.property_address);
+  }
+  if (oldStatus !== newStatus) {
+    const GBP_STATUS_MAP = { active: 'new_listing', under_contract: 'under_contract', closed: 'just_sold' };
+    if (GBP_STATUS_MAP[newStatus]) {
+      createGbpTask(GBP_STATUS_MAP[newStatus], txn.id, txn.property_address, txn);
+    }
+  }
+  if (newStatus === 'under_contract') {
+    await cloneLaterPhasesIfMissing(txn);
+    if (currentTxnId === txn.id) await loadTasks();
+  }
+  updateFellThroughButton();
+}
+
+async function resetFellThroughDeal(txn){
+  const { data: tasks } = await db.from('transaction_tasks').select('id,phase_name').eq('transaction_id', txn.id);
+  const ids = (tasks || []).filter(t => isLaterPhaseName(t.phase_name)).map(t => t.id);
+  if (ids.length) await db.from('transaction_tasks').delete().in('id', ids);
+
+  await db.from('transactions').update({
+    status: 'active',
+    contract_date: null,
+    closing_date: null,
+    sale_price: null
+  }).eq('id', txn.id);
+
+  txn.status = 'active';
+  txn.contract_date = null;
+  txn.closing_date = null;
+  txn.sale_price = null;
+  if (currentTxn && currentTxn.id === txn.id) {
+    currentTxn.status = 'active';
+    currentTxn.contract_date = null;
+    currentTxn.closing_date = null;
+    currentTxn.sale_price = null;
+  }
+
+  $('detail-status').value = 'active';
+  $('key-contract-date').value = '';
+  $('key-closing-date').value = '';
+  $('qs-sale-price').value = '';
+  diligenceBackfilledFor = null;
+  refreshAllCalendarLinks();
+  updateFellThroughButton();
+
+  const GBP_STATUS_MAP = { active: 'new_listing' };
+  if (GBP_STATUS_MAP.active) {
+    createGbpTask('new_listing', txn.id, txn.property_address, txn);
+  }
+  if (currentTxnId === txn.id) await loadTasks();
+}
+
+async function cloneLaterPhasesIfMissing(txn){
+  const { data: existing } = await db.from('transaction_tasks').select('id,phase_name').eq('transaction_id', txn.id);
+  if ((existing || []).some(t => isLaterPhaseName(t.phase_name))) return;
+
+  const sides = templateSidesForDeal(txn.side);
+  const { data: templates, error } = await db.from('template_tasks').select('*').in('side', sides).order('phase_number').order('sort_order');
+  if (error) { console.error(error); return; }
+
+  const rows = (templates || []).filter(t => isLaterPhaseName(t.phase_name)).map(tmpl => {
+    const row = {
+      transaction_id: txn.id,
+      phase_number: tmpl.phase_number,
+      phase_name: tmpl.phase_name,
+      task_text: tmpl.task_text,
+      sort_order: tmpl.sort_order,
+      assignee_id: assigneeForDefaultRole(tmpl.default_role),
+      due_date: dueDateFromTemplate(tmpl, txn),
+      offset_days: tmpl.offset_days ?? 0,
+      anchor_type: tmpl.anchor_type || null,
+    };
+    if (tmpl.summary_label) row.summary_label = tmpl.summary_label;
+    if (tmpl.recurring_days) row.recurring_days = tmpl.recurring_days;
+    return row;
+  });
+  if (rows.length) await db.from('transaction_tasks').insert(rows);
 }
 
 function findDiligenceTask(field, usedIds){
