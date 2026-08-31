@@ -660,6 +660,7 @@
           <div class="qs-field"><label>Sq Ft</label><input type="number" id="qs-sqft" min="0" /></div>
           <div class="qs-field" style="grid-column:1/-1;"><label>Primary Photo URL</label><input type="text" id="qs-photo-url" placeholder="Paste a link to the main listing photo" /></div>
           <div class="qs-field" style="grid-column:1/-1;"><label>Agent Commission Note</label><input type="text" id="qs-agent-comm" /></div>
+          <div class="qs-field" style="grid-column:1/-1;"><label>Transaction fee</label><input type="text" id="qs-txn-fee" inputmode="decimal" placeholder="$" /></div>
         </div>
 
         <label class="checkbox-label"><input type="checkbox" id="qs-do-not-solicit" /> Do not solicit reviews for this client</label>
@@ -1542,6 +1543,7 @@ async function openTransaction(id, focusTaskId){
   $('qs-opp-agent').value = t.opposing_agent ?? '';
   $('qs-bac').value = t.buyer_agent_commission ?? '';
   $('qs-agent-comm').value = t.agent_commission_note ?? '';
+  $('qs-txn-fee').value = t.transaction_fee ?? '';
   $('qs-bedrooms').value = t.list_bedrooms ?? '';
   $('qs-bathrooms').value = t.list_bathrooms ?? '';
   $('qs-sqft').value = t.list_sqft ?? '';
@@ -1587,6 +1589,7 @@ async function openTransaction(id, focusTaskId){
   });
   $('qs-bac').onchange = () => saveDealField('buyer_agent_commission', $('qs-bac').value || null);
   $('qs-agent-comm').onchange = () => saveDealField('agent_commission_note', $('qs-agent-comm').value || null);
+  $('qs-txn-fee').onchange = () => saveDealField('transaction_fee', $('qs-txn-fee').value || null);
   $('qs-bedrooms').onchange = () => saveDealField('list_bedrooms', $('qs-bedrooms').value ? parseInt($('qs-bedrooms').value) : null);
   $('qs-bathrooms').onchange = () => saveDealField('list_bathrooms', $('qs-bathrooms').value ? parseFloat($('qs-bathrooms').value) : null);
   $('qs-sqft').onchange = () => saveDealField('list_sqft', $('qs-sqft').value ? parseInt($('qs-sqft').value) : null);
