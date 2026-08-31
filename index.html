@@ -1231,7 +1231,6 @@ async function loadMyTasks(){
       checkbox.className = 'checkbox';
       checkbox.addEventListener('click', async (e) => {
         e.stopPropagation();
-        if (!confirm(`Mark this complete?\n\n"${task.task_text}"`)) return;
         await completeTask(task);
         await loadMyTasks();
       });
@@ -2655,7 +2654,6 @@ async function completeTask(task){
 async function toggleTask(task){
   const isDone = task.status === 'done';
   if (!isDone) {
-    if (!confirm(`Mark this complete?\n\n"${task.task_text}"`)) return;
     await completeTask(task);
   } else {
     await db.from('transaction_tasks').update({ status:'open', completed_by:null, completed_at:null }).eq('id', task.id);
