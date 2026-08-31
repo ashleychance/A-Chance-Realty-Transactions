@@ -1275,11 +1275,11 @@ async function loadMyTasks(){
     .in('transaction_id', txnIds);
 
   const mine = (allTasks || []).filter(t =>
-    t.assignee_id === (viewingAsId || currentMember.id) && t.status !== 'done'
+    t.assignee_id === (viewingAsId || currentMember.id) && t.status !== 'done' && !isUnderContractGbpTask(t)
   );
 
   // Badge always reflects the logged-in person's own actionable (open) tasks
-  const myOwn = (allTasks || []).filter(t => t.assignee_id === currentMember.id && t.status === 'open');
+  const myOwn = (allTasks || []).filter(t => t.assignee_id === currentMember.id && t.status === 'open' && !isUnderContractGbpTask(t));
   const todayForBadge = new Date(); todayForBadge.setHours(0,0,0,0);
   const ownBadgeCount = myOwn.filter(t => t.flagged || (t.due_date && new Date(t.due_date+'T00:00:00') <= todayForBadge)).length;
   const badgeEl = $('mine-badge');
@@ -2492,7 +2492,7 @@ async function applyStatusSideEffects(txn, oldStatus, newStatus){
     sendClientMilestoneEmail(newStatus, txn.id, txn.property_address);
   }
   if (oldStatus !== newStatus) {
-    const GBP_STATUS_MAP = { active: 'new_listing', under_contract: 'under_contract', closed: 'just_sold' };
+    const GBP_STATUS_MAP = { active: 'new_listing', closed: 'just_sold' };
     if (GBP_STATUS_MAP[newStatus]) {
       createGbpTask(GBP_STATUS_MAP[newStatus], txn.id, txn.property_address, txn);
     }
@@ -2551,7 +2551,7 @@ async function cloneLaterPhasesIfMissing(txn){
   const { data: templates, error } = await db.from('template_tasks').select('*').in('side', sides).order('phase_number').order('sort_order');
   if (error) { console.error(error); return; }
 
-  const rows = (templates || []).filter(t => isLaterPhaseName(t.phase_name)).map(tmpl => {
+  const rows = (templates || []).filter(t => isLaterPhaseName(t.phase_name) && !isUnderContractGbpTask(t)).map(tmpl => {
     const row = {
       transaction_id: txn.id,
       phase_number: tmpl.phase_number,
@@ -2771,7 +2771,7 @@ function renderActivityFeed(){
 async function loadTasks(){
   const scrollY = window.scrollY;
   const { data: tasks } = await db.from('transaction_tasks').select('*').eq('transaction_id', currentTxnId).order('phase_number').order('sort_order');
-  currentTasks = tasks || [];
+  currentTasks = (tasks || []).filter(t => !isUnderContractGbpTask(t));
   if (currentTxn && currentTxn.contract_date && diligenceBackfilledFor !== currentTxnId) {
     await ensureDiligenceDueDates();
     diligenceBackfilledFor = currentTxnId;
@@ -3031,6 +3031,22 @@ function applyDueStyle(input, task){
 }
 
 // ---------------- GBP POST TASKS (for Dawn) ----------------
+// Under Contract GBP posts are retired: do not create or show them.
+// Existing rows stay in the database; go-live / just-sold / price / open house stay.
+function isGbpPostTaskText(text){
+  const s = String(text || '');
+  return /post\s+to\s+google/i.test(s) || /\bgbp\b/i.test(s) || /google business profile/i.test(s);
+}
+
+function isUnderContractPhase(task){
+  const name = String(task && task.phase_name || '').trim().toLowerCase();
+  return name === 'under contract' || Number(task && task.phase_number) === 6;
+}
+
+function isUnderContractGbpTask(task){
+  return !!(task && isUnderContractPhase(task) && isGbpPostTaskText(task.task_text));
+}
+
 const GBP_PHASE_MAP = {
   new_listing:     { num: 4, name: 'Go Live Day' },
   price_change:    { num: 5, name: 'Ongoing Listing Management' },
@@ -3083,6 +3099,7 @@ function buildGbpPostCopy(type, txn){
 }
 
 async function createGbpTask(type, transactionId, propertyAddress, txnOverride){
+  if (type === 'under_contract') return;
   const txn = txnOverride || currentTxn || {};
   const dawn = teamMembers.find(m => m.role === 'assistant_coordinator')
             || teamMembers.find(m => m.role === 'coordinator')
@@ -3384,7 +3401,7 @@ function renderTemplateEditor(){
     card.className = 'qs-card';
     card.innerHTML = `<div class="qs-title">${num}. ${escapeHtml(name)}</div>`;
 
-    templateCache.filter(t => t.phase_number === num).forEach(t => {
+    templateCache.filter(t => t.phase_number === num && !isUnderContractGbpTask(t)).forEach(t => {
       card.appendChild(renderTemplateRow(t));
     });
 
