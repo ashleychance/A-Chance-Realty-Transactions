@@ -305,6 +305,34 @@
   .qs-milestone-label.done{ text-decoration:line-through; color:var(--text-muted); }
   .qs-milestone-sub{ font-size:13px; color:var(--text-muted); }
 
+  .qs-diligence{
+    border-top:1px solid var(--border);
+    padding-top:12px;
+    margin-top:12px;
+    min-width:0;
+  }
+  .qs-diligence-grid{
+    display:grid;
+    grid-template-columns:1fr 1fr;
+    gap:10px 12px;
+    min-width:0;
+  }
+  @media (max-width:400px){
+    .qs-diligence-grid{ grid-template-columns:1fr; }
+  }
+  .qs-diligence-field{ min-width:0; }
+  .qs-diligence-field label{
+    margin-bottom:3px;
+    overflow-wrap:anywhere;
+  }
+  .qs-diligence-field input[type=date]{ width:100%; min-width:0; font-size:15px; padding:8px 10px; }
+  .qs-diligence-add-all{
+    background:none; border:none; padding:0; cursor:pointer;
+    font-size:13px; font-weight:600; font-family:inherit; color:var(--accent-dark);
+    text-align:left;
+  }
+  .qs-diligence-add-all:disabled{ opacity:.45; cursor:default; }
+
   .phase-lock-note{ font-size:14px; color:var(--text-muted); font-style:italic; }
   details.phase.locked summary{ opacity:.75; }
   .checkbox.locked{ cursor:not-allowed; opacity:.4; }
@@ -644,6 +672,14 @@
           <button class="secondary" id="add-client-btn" style="width:100%;margin-top:8px;">+ Add Client</button>
         </div>
 
+        <div id="qs-diligence" class="qs-diligence hidden">
+          <div class="qs-title-row">
+            <div class="qs-title" style="font-size:14px;">Due Diligence</div>
+            <button type="button" class="qs-diligence-add-all hidden" id="qs-diligence-add-all">📅 Add these to Google Calendar</button>
+          </div>
+          <div id="qs-diligence-fields" class="qs-diligence-grid"></div>
+        </div>
+
         <div id="qs-milestones"></div>
       </div>
 
@@ -916,7 +952,18 @@ let currentTasks = [];
 let currentTxn = null;
 let directoryCache = [];
 let viewingAsId = null;
+let diligenceBackfilledFor = null;
 const STANDARD_ROLES = ['Attorney','Opposing Agent','Lender','Title Company','Home Inspector','Insurance Agent','Appraiser'];
+
+// Diligence deadlines live on transaction_tasks (summary_label / task_text +
+// anchor_type/offset_days). No extra columns on transactions.
+const DILIGENCE_FIELDS = [
+  { key:'inspection', label:'Inspections / Due Diligence', summaryLabels:['Due Diligence'], taskTexts:['Schedule inspections'], fallbackOffset:5 },
+  { key:'title', label:'Title', summaryLabels:['Title'], taskTexts:[], fallbackOffset:2 },
+  { key:'appraisal', label:'Appraisal', summaryLabels:['Appraisal'], taskTexts:[], fallbackOffset:7 },
+  { key:'concessions', label:'Concessions', summaryLabels:['Concessions'], taskTexts:[], fallbackOffset:12 },
+];
+const DILIGENCE_SUMMARY_SET = new Set(DILIGENCE_FIELDS.flatMap(f => f.summaryLabels.map(s => s.toLowerCase())));
 
 // Contact Picker API — only available in Chrome on Android as of this
 // writing. Not supported in Safari/iOS at all. We feature-detect and
@@ -1443,6 +1490,7 @@ $('back-btn').addEventListener('click', showList);
 
 async function openTransaction(id, focusTaskId){
   currentTxnId = id;
+  diligenceBackfilledFor = null;
   $('list-view').classList.add('hidden');
   $('my-tasks-view').classList.add('hidden');
   $('directory-view').classList.add('hidden');
@@ -1931,15 +1979,22 @@ $('dir-delete-btn').addEventListener('click', async () => {
   renderDirectoryList();
 });
 
-function updateCalendarLink(linkId, dateVal, title){
-  const el = $(linkId);
-  if (!dateVal) { el.classList.add('hidden'); return; }
-  el.classList.remove('hidden');
+function addDaysYmd(ymd, days){
+  const d = new Date(ymd + 'T00:00:00');
+  d.setDate(d.getDate() + days);
+  const y = d.getFullYear();
+  const m = String(d.getMonth()+1).padStart(2,'0');
+  const day = String(d.getDate()).padStart(2,'0');
+  return `${y}-${m}-${day}`;
+}
 
+function googleCalUrl(dateVal, title){
+  if (!dateVal) return '';
   const d = new Date(dateVal + 'T00:00:00');
   const next = new Date(d.getTime() + 86400000);
   const fmt = (x) => x.toISOString().slice(0,10).replace(/-/g,'');
-  const guests = teamMembers.filter(m => m.id !== currentMember.id).map(m => m.email).filter(Boolean).join(',');
+  const guests = (currentMember ? teamMembers.filter(m => m.id !== currentMember.id) : teamMembers)
+    .map(m => m.email).filter(Boolean).join(',');
 
   const params = new URLSearchParams({
     action: 'TEMPLATE',
@@ -1949,6 +2004,15 @@ function updateCalendarLink(linkId, dateVal, title){
   });
   let url = `https://calendar.google.com/calendar/render?${params.toString()}`;
   if (guests) url += `&add=${encodeURIComponent(guests)}`;
+  return url;
+}
+
+function updateCalendarLink(linkId, dateVal, title){
+  const el = $(linkId);
+  if (!el) return;
+  const url = googleCalUrl(dateVal, title);
+  if (!url) { el.classList.add('hidden'); return; }
+  el.classList.remove('hidden');
   el.href = url;
 }
 
@@ -1960,8 +2024,11 @@ function refreshAllCalendarLinks(){
 }
 
 async function saveKeyDate(column, value){
-  await db.from('transactions').update({ [column]: value || null }).eq('id', currentTxnId);
+  const next = value || null;
+  await db.from('transactions').update({ [column]: next }).eq('id', currentTxnId);
+  if (currentTxn) currentTxn[column] = next;
   await db.rpc('recalc_transaction_due_dates', { p_transaction_id: currentTxnId });
+  if (column === 'contract_date') diligenceBackfilledFor = null;
   await loadTasks();
   refreshAllCalendarLinks();
 }
@@ -1975,8 +2042,143 @@ async function saveDealField(column, value){
   await db.from('transactions').update({ [column]: value }).eq('id', currentTxnId);
 }
 
+function findDiligenceTask(field, usedIds){
+  const unused = currentTasks.filter(t => !usedIds.has(t.id));
+  const byLabel = unused.find(t => t.summary_label && field.summaryLabels.some(l => String(t.summary_label).toLowerCase() === l.toLowerCase()));
+  if (byLabel) return byLabel;
+  const byExactText = unused.find(t => field.taskTexts.some(tx => String(t.task_text || '').trim().toLowerCase() === tx.toLowerCase()));
+  if (byExactText) return byExactText;
+  if (field.key === 'inspection') {
+    return unused.find(t => /schedule inspections/i.test(t.task_text || ''));
+  }
+  return null;
+}
+
+function diligenceDisplayDate(task){
+  if (!currentTxn || !currentTxn.contract_date) return '';
+  return (task && task.due_date) || '';
+}
+
+function diligenceComputedDate(task, field){
+  const contract = currentTxn && currentTxn.contract_date;
+  if (!contract) return '';
+  const offset = (task && task.offset_days != null) ? task.offset_days : field.fallbackOffset;
+  if (offset == null) return '';
+  return addDaysYmd(contract, offset);
+}
+
+function collectDiligenceRows(){
+  const used = new Set();
+  const rows = [];
+  DILIGENCE_FIELDS.forEach(field => {
+    const task = findDiligenceTask(field, used);
+    if (!task) return;
+    used.add(task.id);
+    rows.push({ field, task, date: diligenceDisplayDate(task) });
+  });
+  return rows;
+}
+
+async function ensureDiligenceDueDates(){
+  const contract = currentTxn && currentTxn.contract_date;
+  if (!contract) return;
+  const used = new Set();
+  const writes = [];
+  DILIGENCE_FIELDS.forEach(field => {
+    const task = findDiligenceTask(field, used);
+    if (!task) return;
+    used.add(task.id);
+    if (task.due_date) return;
+    const due = diligenceComputedDate(task, field);
+    if (!due) return;
+    writes.push(
+      db.from('transaction_tasks').update({ due_date: due }).eq('id', task.id).then(() => {
+        task.due_date = due;
+      })
+    );
+  });
+  if (writes.length) await Promise.all(writes);
+}
+
+function renderDueDiligence(){
+  const wrap = $('qs-diligence');
+  const fields = $('qs-diligence-fields');
+  const addAll = $('qs-diligence-add-all');
+  if (!wrap || !fields) return;
+
+  const rows = collectDiligenceRows();
+  fields.innerHTML = '';
+
+  if (rows.length === 0) {
+    wrap.classList.add('hidden');
+    return;
+  }
+  wrap.classList.remove('hidden');
+
+  const addr = currentTxn ? currentTxn.property_address : '';
+  const calItems = [];
+
+  rows.forEach(({ field, task, date }) => {
+    const cell = document.createElement('div');
+    cell.className = 'qs-diligence-field';
+
+    const lab = document.createElement('label');
+    lab.setAttribute('for', 'dd-' + field.key);
+    lab.textContent = field.label;
+
+    const input = document.createElement('input');
+    input.type = 'date';
+    input.id = 'dd-' + field.key;
+    input.value = date;
+    input.addEventListener('change', async () => {
+      const next = input.value || null;
+      await db.from('transaction_tasks').update({ due_date: next }).eq('id', task.id);
+      task.due_date = next;
+      const t = currentTasks.find(x => x.id === task.id);
+      if (t) t.due_date = next;
+      renderDueDiligence();
+      renderPhases();
+    });
+
+    const cal = document.createElement('a');
+    cal.className = 'add-cal-link' + (date ? '' : ' hidden');
+    cal.target = '_blank';
+    cal.rel = 'noopener';
+    cal.textContent = '📅 Add to Calendar';
+    if (date) {
+      const title = `${field.label}: ${addr}`;
+      const url = googleCalUrl(date, title);
+      cal.href = url;
+      calItems.push({ title, date, url });
+    }
+
+    cell.appendChild(lab);
+    cell.appendChild(input);
+    cell.appendChild(cal);
+    fields.appendChild(cell);
+  });
+
+  if (calItems.length) {
+    addAll.classList.remove('hidden');
+    addAll.disabled = false;
+    addAll.onclick = (e) => {
+      e.preventDefault();
+      calItems.forEach((item, i) => {
+        setTimeout(() => window.open(item.url, '_blank', 'noopener'), i * 350);
+      });
+    };
+  } else {
+    addAll.classList.add('hidden');
+    addAll.disabled = true;
+    addAll.onclick = null;
+  }
+}
+
 function renderQuickStatus(){
-  const milestones = currentTasks.filter(t => t.summary_label).sort((a,b) => a.phase_number - b.phase_number || a.sort_order - b.sort_order);
+  renderDueDiligence();
+  const milestones = currentTasks
+    .filter(t => t.summary_label && !DILIGENCE_SUMMARY_SET.has(String(t.summary_label).toLowerCase()))
+    .sort((a,b) => a.phase_number - b.phase_number || a.sort_order - b.sort_order);
 
   const container = $('qs-milestones');
   container.innerHTML = '';
@@ -2042,6 +2244,10 @@ async function loadTasks(){
   const scrollY = window.scrollY;
   const { data: tasks } = await db.from('transaction_tasks').select('*').eq('transaction_id', currentTxnId).order('phase_number').order('sort_order');
   currentTasks = tasks || [];
+  if (currentTxn && currentTxn.contract_date && diligenceBackfilledFor !== currentTxnId) {
+    await ensureDiligenceDueDates();
+    diligenceBackfilledFor = currentTxnId;
+  }
   renderQuickStatus();
   renderPhases();
   renderActivityFeed();
