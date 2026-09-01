@@ -271,6 +271,66 @@
     background:none; border:none; color:var(--accent-dark); font-size:17px;
     font-weight:600; cursor:pointer; padding:0; margin-bottom:14px; display:flex; align-items:center; gap:4px;
   }
+  #detail-sticky{
+    position:sticky; top:0; z-index:9;
+    background:var(--bg);
+    margin:0 0 12px;
+    min-width:0;
+  }
+  .deal-banner{
+    position:relative;
+    height:168px;
+    border-radius:12px;
+    overflow:hidden;
+    min-width:0;
+    background:var(--accent);
+  }
+  .deal-banner.is-compact{ height:52px; }
+  .deal-banner-img, .deal-banner-fallback{
+    position:absolute; inset:0;
+    width:100%; height:100%;
+    object-fit:cover;
+  }
+  .deal-banner-fallback{
+    background:linear-gradient(160deg, var(--accent) 0%, var(--accent-dark) 100%);
+  }
+  .deal-banner-shade{
+    position:absolute; left:0; right:0; bottom:0; height:72%;
+    background:linear-gradient(transparent, rgba(0,0,0,.66));
+    pointer-events:none;
+  }
+  .deal-banner-back{
+    position:absolute; top:8px; left:8px; z-index:2;
+    background:rgba(0,0,0,.42); color:#fff; border:none; border-radius:8px;
+    padding:6px 10px; font-size:14px; font-weight:600; cursor:pointer;
+    font-family:inherit; max-width:calc(100% - 72px);
+    overflow-wrap:anywhere;
+  }
+  .deal-banner.is-compact .deal-banner-back{
+    top:50%; transform:translateY(-50%);
+    background:rgba(0,0,0,.28);
+    padding:5px 8px; font-size:13px;
+  }
+  .deal-banner-bar{
+    position:absolute; left:0; right:0; bottom:0;
+    display:flex; align-items:flex-end; gap:8px;
+    padding:10px 12px 10px 12px;
+    min-width:0; z-index:2;
+  }
+  .deal-banner.is-compact .deal-banner-bar{
+    padding:8px 12px 8px 72px;
+    align-items:center;
+  }
+  .deal-banner-bar h1{
+    flex:1; min-width:0; margin:0;
+    color:#fff; font-size:20px; font-weight:600;
+    overflow-wrap:anywhere; line-height:1.2;
+  }
+  .deal-banner.is-compact .deal-banner-bar h1{ font-size:15px; }
+  .deal-banner-edit{
+    flex:0 0 auto;
+    background:rgba(255,255,255,.18); color:#fff; border:none;
+  }
   .detail-head{ margin-bottom:6px; }
   .detail-head-row{ display:flex; align-items:flex-start; gap:8px; min-width:0; }
   .detail-head-row h1{ flex:1; min-width:0; }
@@ -401,11 +461,14 @@
     .qs-diligence-grid{ grid-template-columns:1fr; }
   }
   .qs-diligence-field{ min-width:0; }
+  .qs-diligence-ends{ grid-column:1 / -1; }
   .qs-diligence-field label{
     margin-bottom:3px;
     overflow-wrap:anywhere;
   }
-  .qs-diligence-field input[type=date]{ width:100%; min-width:0; font-size:15px; padding:8px 10px; }
+  .qs-diligence-field input[type=date],
+  .qs-diligence-field input[type=text],
+  .qs-diligence-field select{ width:100%; min-width:0; font-size:15px; padding:8px 10px; }
   .qs-diligence-add-all{
     background:none; border:none; padding:0; cursor:pointer;
     font-size:13px; font-weight:600; font-family:inherit; color:var(--accent-dark);
@@ -742,12 +805,19 @@
 
     <!-- DETAIL VIEW -->
     <div id="detail-view" class="hidden">
-      <button class="back-btn" id="back-btn">&larr; All transactions</button>
-      <div class="detail-head">
-        <div class="detail-head-row">
-          <h1 id="detail-address"></h1>
-          <button class="edit-task-btn" id="edit-txn-btn" title="Edit transaction details">✎</button>
+      <div id="detail-sticky">
+        <div id="deal-banner" class="deal-banner">
+          <div id="deal-banner-fallback" class="deal-banner-fallback" aria-hidden="true"></div>
+          <img id="deal-banner-img" class="deal-banner-img hidden" alt="">
+          <div class="deal-banner-shade"></div>
+          <button type="button" class="deal-banner-back" id="back-btn">&larr; Back</button>
+          <div class="deal-banner-bar">
+            <h1 id="detail-address"></h1>
+            <button class="edit-task-btn deal-banner-edit" id="edit-txn-btn" title="Edit transaction details">✎</button>
+          </div>
         </div>
+      </div>
+      <div class="detail-head">
         <div class="client" id="detail-client"></div>
         <div class="mls-line" id="detail-mls"></div>
         <div class="status-row">
@@ -791,7 +861,16 @@
           <div class="qs-field"><label>Bedrooms</label><input type="number" id="qs-bedrooms" min="0" /></div>
           <div class="qs-field"><label>Bathrooms</label><input type="number" id="qs-bathrooms" min="0" step="0.5" /></div>
           <div class="qs-field"><label>Sq Ft</label><input type="number" id="qs-sqft" min="0" /></div>
-          <div class="qs-field" style="grid-column:1/-1;"><label>Primary Photo URL</label><input type="text" id="qs-photo-url" placeholder="Paste a link to the main listing photo" /></div>
+          <div class="qs-field" style="grid-column:1/-1;">
+            <label>Listing photo</label>
+            <div class="deal-docs-actions">
+              <button type="button" class="secondary" id="qs-banner-photo-btn">Take photo</button>
+              <button type="button" class="secondary" id="qs-banner-upload-btn">Upload photo</button>
+            </div>
+            <input type="file" id="qs-banner-camera" class="deal-docs-hidden-input" accept="image/*" capture="environment" />
+            <input type="file" id="qs-banner-file" class="deal-docs-hidden-input" accept="image/*" />
+            <div id="qs-banner-status" class="deal-docs-status hidden"></div>
+          </div>
           <div class="qs-field" style="grid-column:1/-1;"><label>Agent Commission Note</label><input type="text" id="qs-agent-comm" /><div class="qs-comm-dollars hidden" id="qs-note-dollars"></div></div>
           <div class="qs-field" style="grid-column:1/-1;"><label>Transaction fee</label><input type="text" id="qs-txn-fee" inputmode="decimal" placeholder="$" /></div>
         </div>
@@ -806,12 +885,29 @@
           <button class="secondary" id="add-client-btn" style="width:100%;margin-top:8px;">+ Add Client</button>
         </div>
 
-        <div id="qs-diligence" class="qs-diligence hidden">
+        <div id="qs-diligence" class="qs-diligence">
           <div class="qs-title-row">
-            <div class="qs-title" style="font-size:14px;">Due Diligence</div>
-            <button type="button" class="qs-diligence-add-all hidden" id="qs-diligence-add-all">📅 Add these to Google Calendar</button>
+            <div class="qs-title" style="font-size:14px;">Deal terms</div>
           </div>
-          <div id="qs-diligence-fields" class="qs-diligence-grid"></div>
+          <div class="qs-diligence-grid">
+            <div class="qs-diligence-field qs-diligence-ends">
+              <label for="qs-diligence-ends">Due diligence ends</label>
+              <input type="date" id="qs-diligence-ends" />
+              <a href="#" id="cal-diligence-ends" class="add-cal-link hidden" target="_blank" rel="noopener">📅 Add to Calendar</a>
+            </div>
+            <div class="qs-diligence-field">
+              <label for="qs-concessions">Seller concessions</label>
+              <input type="text" id="qs-concessions" placeholder="$ or notes" />
+            </div>
+            <div class="qs-diligence-field">
+              <label for="qs-warranty">Home warranty</label>
+              <select id="qs-warranty">
+                <option value="">Not set</option>
+                <option value="yes">Yes</option>
+                <option value="no">No</option>
+              </select>
+            </div>
+          </div>
         </div>
 
         <div id="qs-milestones"></div>
@@ -1102,10 +1198,13 @@ let viewingAsId = null;
 let diligenceBackfilledFor = null;
 const STANDARD_ROLES = ['Attorney','Opposing Agent','Lender','Title Company','Home Inspector','Insurance Agent','Appraiser'];
 
-// Diligence deadlines live on transaction_tasks (summary_label / task_text +
-// anchor_type/offset_days). No extra columns on transactions.
+// Date that still belongs on Quick Status / calendar. Title and appraisal
+// stay as regular tasks; concessions is a text amount on the deal.
+const DILIGENCE_END_FIELD = {
+  key:'inspection', label:'Due diligence ends', summaryLabels:['Due Diligence'], taskTexts:['Schedule inspections'], fallbackOffset:5
+};
 const DILIGENCE_FIELDS = [
-  { key:'inspection', label:'Inspections / Due Diligence', summaryLabels:['Due Diligence'], taskTexts:['Schedule inspections'], fallbackOffset:5 },
+  DILIGENCE_END_FIELD,
   { key:'title', label:'Title', summaryLabels:['Title'], taskTexts:[], fallbackOffset:2 },
   { key:'appraisal', label:'Appraisal', summaryLabels:['Appraisal'], taskTexts:[], fallbackOffset:7 },
   { key:'concessions', label:'Concessions', summaryLabels:['Concessions'], taskTexts:[], fallbackOffset:12 },
@@ -1285,6 +1384,8 @@ function setTab(which){
 function hideAppPanels(){
   ['list-view','production-view','my-tasks-view','directory-view','template-view','detail-view']
     .forEach(id => $(id).classList.add('hidden'));
+  const topbar = document.querySelector('header.topbar');
+  if (topbar) topbar.classList.remove('hidden');
 }
 
 // ---------------- MY TASKS VIEW ----------------
@@ -1643,8 +1744,12 @@ async function openTransaction(id, focusTaskId){
   currentTxnId = id;
   diligenceBackfilledFor = null;
   hideAppPanels();
+  const topbar = document.querySelector('header.topbar');
+  if (topbar) topbar.classList.add('hidden');
   $('main-tabs').classList.add('hidden');
   $('detail-view').classList.remove('hidden');
+  const banner = $('deal-banner');
+  if (banner) banner.classList.remove('is-compact');
 
   const { data: t } = await db.from('transactions').select('*').eq('id', id).single();
   currentTxn = t;
@@ -1699,8 +1804,9 @@ async function openTransaction(id, focusTaskId){
   $('qs-bedrooms').value = t.list_bedrooms ?? '';
   $('qs-bathrooms').value = t.list_bathrooms ?? '';
   $('qs-sqft').value = t.list_sqft ?? '';
-  $('qs-photo-url').value = t.primary_photo_url ?? '';
   $('qs-do-not-solicit').checked = !!t.do_not_solicit;
+  fillQsDealTerms();
+  refreshDealBanner();
 
   $('qs-list-price').onchange = () => {
     const newVal = numOrNull($('qs-list-price').value);
@@ -1763,8 +1869,10 @@ async function openTransaction(id, focusTaskId){
   $('qs-bedrooms').onchange = () => saveDealField('list_bedrooms', $('qs-bedrooms').value ? parseInt($('qs-bedrooms').value) : null);
   $('qs-bathrooms').onchange = () => saveDealField('list_bathrooms', $('qs-bathrooms').value ? parseFloat($('qs-bathrooms').value) : null);
   $('qs-sqft').onchange = () => saveDealField('list_sqft', $('qs-sqft').value ? parseInt($('qs-sqft').value) : null);
-  $('qs-photo-url').onchange = () => saveDealField('primary_photo_url', $('qs-photo-url').value || null);
   $('qs-do-not-solicit').onchange = () => saveDealField('do_not_solicit', $('qs-do-not-solicit').checked);
+  $('qs-diligence-ends').onchange = () => saveDiligenceEnds($('qs-diligence-ends').value || null);
+  $('qs-concessions').onchange = () => saveSellerConcessions($('qs-concessions').value.trim() || null);
+  $('qs-warranty').onchange = () => saveHomeWarranty($('qs-warranty').value || null);
 
   refreshCommissionDollars();
 
@@ -2022,7 +2130,7 @@ async function deleteDealDocument(doc){
 }
 
 async function uploadDealDoc(file){
-  if (!file || !currentTxnId || !currentMember) return;
+  if (!file || !currentTxnId || !currentMember) return null;
   setDealDocsStatus('Uploading…');
   const id = (crypto.randomUUID && crypto.randomUUID()) || String(Date.now()) + '-' + Math.random().toString(16).slice(2);
   const path = `${currentTxnId}/${id}-${safeDealDocName(file.name)}`;
@@ -2032,7 +2140,8 @@ async function uploadDealDoc(file){
   });
   if (upErr) {
     setDealDocsStatus(isDealDocsUnavailable(upErr) ? 'Documents not ready' : upErr.message);
-    return;
+    setQsBannerStatus(isDealDocsUnavailable(upErr) ? 'Documents not ready' : upErr.message);
+    return null;
   }
   const { error: rowErr } = await db.from('deal_documents').insert({
     transaction_id: currentTxnId,
@@ -2044,9 +2153,10 @@ async function uploadDealDoc(file){
   });
   if (rowErr) {
     setDealDocsStatus(isDealDocsUnavailable(rowErr) ? 'Documents not ready' : rowErr.message);
-    return;
+    return path;
   }
   await loadDealDocuments();
+  return path;
 }
 
 $('deal-docs-photo-btn').addEventListener('click', () => $('deal-docs-camera').click());
@@ -2060,6 +2170,19 @@ $('deal-docs-file').addEventListener('change', async (e) => {
   const files = [...(e.target.files || [])];
   e.target.value = '';
   for (const f of files) await uploadDealDoc(f);
+});
+
+$('qs-banner-photo-btn').addEventListener('click', () => $('qs-banner-camera').click());
+$('qs-banner-upload-btn').addEventListener('click', () => $('qs-banner-file').click());
+$('qs-banner-camera').addEventListener('change', async (e) => {
+  const file = (e.target.files || [])[0];
+  e.target.value = '';
+  if (file) await uploadListingBanner(file);
+});
+$('qs-banner-file').addEventListener('change', async (e) => {
+  const file = (e.target.files || [])[0];
+  e.target.value = '';
+  if (file) await uploadListingBanner(file);
 });
 
 // ---------------- CONTACTS ----------------
@@ -2355,6 +2478,7 @@ function refreshAllCalendarLinks(){
   updateCalendarLink('cal-listing', $('key-listing-date').value, `Go-Live: ${addr}`);
   updateCalendarLink('cal-contract', $('key-contract-date').value, `Contract Date: ${addr}`);
   updateCalendarLink('cal-closing', $('key-closing-date').value, `Closing: ${addr}`);
+  updateDiligenceCalendarLink();
 }
 
 async function saveKeyDate(column, value){
@@ -2627,7 +2751,123 @@ $('prod-prev').addEventListener('click', () => shiftProdPeriod(-1));
 $('prod-next').addEventListener('click', () => shiftProdPeriod(1));
 
 async function saveDealField(column, value){
-  await db.from('transactions').update({ [column]: value }).eq('id', currentTxnId);
+  const { error } = await db.from('transactions').update({ [column]: value }).eq('id', currentTxnId);
+  if (error) console.warn('saveDealField', column, error.message);
+  return error;
+}
+
+function listingPhotoSrc(raw){
+  if (!raw) return null;
+  if (/^https?:\/\//i.test(raw)) return Promise.resolve(raw);
+  return sbRoot.storage.from('deal-docs').createSignedUrl(raw, 3600)
+    .then(({ data }) => (data && data.signedUrl) || null)
+    .catch(() => null);
+}
+
+async function refreshDealBanner(){
+  const img = $('deal-banner-img');
+  const addr = $('detail-address');
+  if (addr && currentTxn) addr.textContent = currentTxn.property_address || '';
+  if (!img) return;
+  const raw = currentTxn && currentTxn.primary_photo_url;
+  if (!raw) {
+    img.classList.add('hidden');
+    img.removeAttribute('src');
+    return;
+  }
+  const src = await listingPhotoSrc(raw);
+  if (!src || currentTxn.primary_photo_url !== raw) return;
+  img.src = src;
+  img.classList.remove('hidden');
+}
+
+function updateDealBannerCompact(){
+  const banner = $('deal-banner');
+  if (!banner || $('detail-view').classList.contains('hidden')) return;
+  banner.classList.toggle('is-compact', window.scrollY > 28);
+}
+window.addEventListener('scroll', updateDealBannerCompact, { passive: true });
+
+function setQsBannerStatus(text){
+  const el = $('qs-banner-status');
+  if (!el) return;
+  if (!text) { el.classList.add('hidden'); el.textContent = ''; return; }
+  el.textContent = text;
+  el.classList.remove('hidden');
+}
+
+async function uploadListingBanner(file){
+  if (!file || !currentTxnId || !currentMember) return;
+  setQsBannerStatus('Uploading listing photo…');
+  const path = await uploadDealDoc(file);
+  if (!path) return;
+  const err = await saveDealField('primary_photo_url', path);
+  if (err) {
+    setQsBannerStatus(err.message);
+    return;
+  }
+  if (currentTxn) currentTxn.primary_photo_url = path;
+  setQsBannerStatus('Listing photo updated.');
+  await refreshDealBanner();
+}
+
+function findLinkedTask(field){
+  return findDiligenceTask(field, new Set());
+}
+
+function fillQsDealTerms(){
+  const t = currentTxn || {};
+  const endTask = findLinkedTask(DILIGENCE_END_FIELD);
+  const concTask = findLinkedTask(DILIGENCE_FIELDS.find(f => f.key === 'concessions'));
+  const ends = t.diligence_ends || (endTask && endTask.due_date) || '';
+  const concessions = t.seller_concessions != null && t.seller_concessions !== ''
+    ? t.seller_concessions
+    : ((concTask && concTask.notes) || '');
+  const warranty = t.home_warranty || '';
+  if ($('qs-diligence-ends')) $('qs-diligence-ends').value = ends || '';
+  if ($('qs-concessions')) $('qs-concessions').value = concessions || '';
+  if ($('qs-warranty')) $('qs-warranty').value = (warranty === 'yes' || warranty === 'no') ? warranty : '';
+  updateDiligenceCalendarLink();
+}
+
+function updateDiligenceCalendarLink(){
+  const el = $('cal-diligence-ends');
+  if (!el) return;
+  const dateVal = $('qs-diligence-ends') ? $('qs-diligence-ends').value : '';
+  const addr = currentTxn ? currentTxn.property_address : '';
+  const url = googleCalUrl(dateVal, `Due diligence ends: ${addr}`);
+  if (!url) { el.classList.add('hidden'); el.removeAttribute('href'); return; }
+  el.classList.remove('hidden');
+  el.href = url;
+}
+
+async function saveDiligenceEnds(value){
+  if (currentTxn) currentTxn.diligence_ends = value;
+  await saveDealField('diligence_ends', value);
+  const task = findLinkedTask(DILIGENCE_END_FIELD);
+  if (task) {
+    await db.from('transaction_tasks').update({ due_date: value }).eq('id', task.id);
+    task.due_date = value;
+    const live = currentTasks.find(x => x.id === task.id);
+    if (live) live.due_date = value;
+    renderPhases();
+  }
+  updateDiligenceCalendarLink();
+}
+
+async function saveSellerConcessions(value){
+  if (currentTxn) currentTxn.seller_concessions = value;
+  await saveDealField('seller_concessions', value);
+  const task = findLinkedTask(DILIGENCE_FIELDS.find(f => f.key === 'concessions'));
+  if (task) {
+    await db.from('transaction_tasks').update({ notes: value }).eq('id', task.id);
+    task.notes = value;
+  }
+}
+
+async function saveHomeWarranty(value){
+  if (currentTxn) currentTxn.home_warranty = value;
+  await saveDealField('home_warranty', value);
 }
 
 function isLaterPhaseName(name){
@@ -2801,96 +3041,20 @@ function collectDiligenceRows(){
 async function ensureDiligenceDueDates(){
   const contract = currentTxn && currentTxn.contract_date;
   if (!contract) return;
-  const used = new Set();
-  const writes = [];
-  DILIGENCE_FIELDS.forEach(field => {
-    const task = findDiligenceTask(field, used);
-    if (!task) return;
-    used.add(task.id);
-    if (task.due_date) return;
-    const due = diligenceComputedDate(task, field);
-    if (!due) return;
-    writes.push(
-      db.from('transaction_tasks').update({ due_date: due }).eq('id', task.id).then(() => {
-        task.due_date = due;
-      })
-    );
-  });
-  if (writes.length) await Promise.all(writes);
+  const task = findDiligenceTask(DILIGENCE_END_FIELD, new Set());
+  if (!task || task.due_date) return;
+  const due = currentTxn.diligence_ends || diligenceComputedDate(task, DILIGENCE_END_FIELD);
+  if (!due) return;
+  await db.from('transaction_tasks').update({ due_date: due }).eq('id', task.id);
+  task.due_date = due;
+  if (!currentTxn.diligence_ends) {
+    currentTxn.diligence_ends = due;
+    await saveDealField('diligence_ends', due);
+  }
 }
 
 function renderDueDiligence(){
-  const wrap = $('qs-diligence');
-  const fields = $('qs-diligence-fields');
-  const addAll = $('qs-diligence-add-all');
-  if (!wrap || !fields) return;
-
-  const rows = collectDiligenceRows();
-  fields.innerHTML = '';
-
-  if (rows.length === 0) {
-    wrap.classList.add('hidden');
-    return;
-  }
-  wrap.classList.remove('hidden');
-
-  const addr = currentTxn ? currentTxn.property_address : '';
-  const calItems = [];
-
-  rows.forEach(({ field, task, date }) => {
-    const cell = document.createElement('div');
-    cell.className = 'qs-diligence-field';
-
-    const lab = document.createElement('label');
-    lab.setAttribute('for', 'dd-' + field.key);
-    lab.textContent = field.label;
-
-    const input = document.createElement('input');
-    input.type = 'date';
-    input.id = 'dd-' + field.key;
-    input.value = date;
-    input.addEventListener('change', async () => {
-      const next = input.value || null;
-      await db.from('transaction_tasks').update({ due_date: next }).eq('id', task.id);
-      task.due_date = next;
-      const t = currentTasks.find(x => x.id === task.id);
-      if (t) t.due_date = next;
-      renderDueDiligence();
-      renderPhases();
-    });
-
-    const cal = document.createElement('a');
-    cal.className = 'add-cal-link' + (date ? '' : ' hidden');
-    cal.target = '_blank';
-    cal.rel = 'noopener';
-    cal.textContent = '📅 Add to Calendar';
-    if (date) {
-      const title = `${field.label}: ${addr}`;
-      const url = googleCalUrl(date, title);
-      cal.href = url;
-      calItems.push({ title, date, url });
-    }
-
-    cell.appendChild(lab);
-    cell.appendChild(input);
-    cell.appendChild(cal);
-    fields.appendChild(cell);
-  });
-
-  if (calItems.length) {
-    addAll.classList.remove('hidden');
-    addAll.disabled = false;
-    addAll.onclick = (e) => {
-      e.preventDefault();
-      calItems.forEach((item, i) => {
-        setTimeout(() => window.open(item.url, '_blank', 'noopener'), i * 350);
-      });
-    };
-  } else {
-    addAll.classList.add('hidden');
-    addAll.disabled = true;
-    addAll.onclick = null;
-  }
+  fillQsDealTerms();
 }
 
 function renderQuickStatus(){
@@ -3299,7 +3463,9 @@ async function createGbpTask(type, transactionId, propertyAddress, txnOverride){
 
   const copy = buildGbpPostCopy(type, { ...txn, property_address: propertyAddress });
   const photoLine = txn.primary_photo_url
-    ? `Photo: ${txn.primary_photo_url}`
+    ? (/^https?:\/\//i.test(txn.primary_photo_url)
+      ? `Photo: ${txn.primary_photo_url}`
+      : `Photo: listing banner uploaded`)
     : `Photo: attach from camera roll / MLS`;
 
   const notes = `Copy:\n${copy}\n\n${photoLine}\n\nPost here: https://business.google.com`;
