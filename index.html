@@ -130,19 +130,21 @@
     padding:9px 14px; border:1px solid var(--border); border-radius:8px;
     background:#fff; color:var(--text); font-size:17px; font-weight:600; cursor:pointer;
   }
+  button.secondary:disabled{ opacity:.4; cursor:default; }
   .err{ color:var(--danger); font-size:15px; margin-top:10px; }
 
   /* ---------- Transaction list ---------- */
   .tabs{
-    display:flex; gap:6px; background:var(--surface); border:1px solid var(--border);
+    display:flex; flex-wrap:wrap; gap:6px; background:var(--surface); border:1px solid var(--border);
     border-radius:10px; padding:4px; margin-bottom:16px; min-width:0;
   }
   .tab{
-    flex:1; min-width:0; padding:9px 4px; border:none; border-radius:7px; background:none;
-    font-size:17px; font-weight:600; color:var(--text-muted); cursor:pointer; font-family:inherit;
+    flex:1 1 0; min-width:0; padding:9px 4px; border:none; border-radius:7px; background:none;
+    font-size:15px; font-weight:600; color:var(--text-muted); cursor:pointer; font-family:inherit;
+    overflow-wrap:anywhere;
   }
-  @media (max-width:360px){
-    .tab{ font-size:15px; }
+  @media (max-width:420px){
+    .tab{ font-size:13px; padding:8px 2px; }
   }
   .tab.active{ background:var(--accent); color:#fff; }
   .tab-badge{
@@ -354,6 +356,26 @@
   .ytd-stat{ min-width:0; }
   .ytd-stat-label{ display:block; font-size:12px; font-weight:600; color:var(--text-muted); text-transform:uppercase; letter-spacing:.03em; }
   .ytd-stat-val{ display:block; font-size:17px; font-weight:700; color:var(--accent-dark); overflow-wrap:anywhere; }
+
+  .prod-period-nav{
+    display:flex; align-items:center; gap:8px; margin-bottom:14px; min-width:0;
+  }
+  .prod-period-nav.hidden{ display:none; }
+  .prod-period-nav button{
+    flex:0 0 44px; padding:8px 0; min-width:0;
+  }
+  .prod-period-label{
+    flex:1; min-width:0; text-align:center;
+    font-family:'Fraunces',serif; font-size:18px; font-weight:600;
+    overflow-wrap:anywhere;
+  }
+  .prod-deal{
+    background:var(--surface); border:1px solid var(--border); border-radius:12px;
+    padding:12px 14px; margin-bottom:8px; cursor:pointer; min-width:0;
+  }
+  .prod-deal:active{ background:#faf9f6; }
+  .prod-deal-addr{ font-weight:600; font-size:16px; overflow-wrap:anywhere; }
+  .prod-deal-meta{ font-size:14px; color:var(--text-muted); margin-top:4px; overflow-wrap:anywhere; }
   .qs-milestone-row{
     display:flex; align-items:center; gap:10px; padding:8px 0; border-top:1px solid var(--border);
   }
@@ -646,6 +668,7 @@
   <main>
     <div class="tabs" id="main-tabs">
       <button class="tab active" id="tab-txns">Transactions</button>
+      <button class="tab" id="tab-production">Production</button>
       <button class="tab" id="tab-mine">My Tasks <span class="tab-badge hidden" id="mine-badge">0</span></button>
       <button class="tab" id="tab-directory">Directory</button>
     </div>
@@ -670,12 +693,31 @@
       <div id="template-container"></div>
     </div>
 
+    <!-- PRODUCTION VIEW -->
+    <div id="production-view" class="hidden">
+      <div class="list-header">
+        <h1>Production</h1>
+      </div>
+      <div class="filter-tabs" id="prod-period-tabs">
+        <button type="button" class="filter-tab active" data-prod-period="month">This month</button>
+        <button type="button" class="filter-tab" data-prod-period="year">This year</button>
+        <button type="button" class="filter-tab" data-prod-period="ytd">YTD</button>
+      </div>
+      <div id="prod-period-nav" class="prod-period-nav">
+        <button type="button" class="secondary" id="prod-prev" aria-label="Previous period">‹</button>
+        <div class="prod-period-label" id="prod-period-label"></div>
+        <button type="button" class="secondary" id="prod-next" aria-label="Next period">›</button>
+      </div>
+      <div id="prod-tally" class="ytd-tally"></div>
+      <div id="prod-deal-list"></div>
+      <div id="prod-empty" class="empty-state hidden">No closed deals in this period.</div>
+    </div>
+
     <!-- LIST VIEW -->
     <div id="list-view">
       <div class="list-header">
         <h1>Transactions</h1>
       </div>
-      <div id="ytd-tally" class="ytd-tally"></div>
       <input type="text" id="txn-search" class="search-input" placeholder="Search by address or client..." />
       <div class="filter-tabs">
         <button class="filter-tab active" data-filter="active">Active</button>
@@ -1229,22 +1271,26 @@ function roleLabel(role){
 
 // ---------------- TABS ----------------
 $('tab-txns').addEventListener('click', () => { setTab('txns'); showList(); });
+$('tab-production').addEventListener('click', () => { setTab('production'); showProduction(); });
 $('tab-mine').addEventListener('click', () => { setTab('mine'); showMyTasks(); });
 $('tab-directory').addEventListener('click', () => { setTab('directory'); showDirectory(); });
 
 function setTab(which){
   $('tab-txns').classList.toggle('active', which === 'txns');
+  $('tab-production').classList.toggle('active', which === 'production');
   $('tab-mine').classList.toggle('active', which === 'mine');
   $('tab-directory').classList.toggle('active', which === 'directory');
+}
+
+function hideAppPanels(){
+  ['list-view','production-view','my-tasks-view','directory-view','template-view','detail-view']
+    .forEach(id => $(id).classList.add('hidden'));
 }
 
 // ---------------- MY TASKS VIEW ----------------
 async function showMyTasks(){
   currentTxnId = null;
-  $('list-view').classList.add('hidden');
-  $('detail-view').classList.add('hidden');
-  $('directory-view').classList.add('hidden');
-  $('template-view').classList.add('hidden');
+  hideAppPanels();
   $('main-tabs').classList.remove('hidden');
   $('my-tasks-view').classList.remove('hidden');
   setTab('mine');
@@ -1452,10 +1498,7 @@ function formatShortDate(dateStr){
 // ---------------- LIST VIEW ----------------
 async function showList(){
   currentTxnId = null;
-  $('detail-view').classList.add('hidden');
-  $('my-tasks-view').classList.add('hidden');
-  $('directory-view').classList.add('hidden');
-  $('template-view').classList.add('hidden');
+  hideAppPanels();
   $('main-tabs').classList.remove('hidden');
   $('list-view').classList.remove('hidden');
   setTab('txns');
@@ -1466,9 +1509,9 @@ let txnCache = [];
 let txnTasksCache = [];
 let currentFilter = 'active';
 
-document.querySelectorAll('.filter-tab').forEach(btn => {
+document.querySelectorAll('#list-view .filter-tab').forEach(btn => {
   btn.addEventListener('click', () => {
-    document.querySelectorAll('.filter-tab').forEach(b => b.classList.remove('active'));
+    document.querySelectorAll('#list-view .filter-tab').forEach(b => b.classList.remove('active'));
     btn.classList.add('active');
     currentFilter = btn.dataset.filter;
     renderTransactionCards();
@@ -1480,7 +1523,7 @@ async function loadTransactions(){
   const { data: transactions, error } = await db.from('transactions').select('*').order('created_at', { ascending:false });
   if (error) { console.error(error); return; }
   txnCache = transactions || [];
-  renderYtdTally();
+  if (!$('production-view').classList.contains('hidden')) renderProduction();
 
   const ids = txnCache.map(t => t.id);
   const { data: allTasks } = ids.length
@@ -1599,10 +1642,7 @@ $('back-btn').addEventListener('click', showList);
 async function openTransaction(id, focusTaskId){
   currentTxnId = id;
   diligenceBackfilledFor = null;
-  $('list-view').classList.add('hidden');
-  $('my-tasks-view').classList.add('hidden');
-  $('directory-view').classList.add('hidden');
-  $('template-view').classList.add('hidden');
+  hideAppPanels();
   $('main-tabs').classList.add('hidden');
   $('detail-view').classList.remove('hidden');
 
@@ -2188,10 +2228,8 @@ async function loadDirectory(){
 }
 
 async function showDirectory(){
-  $('list-view').classList.add('hidden');
-  $('my-tasks-view').classList.add('hidden');
-  $('detail-view').classList.add('hidden');
-  $('template-view').classList.add('hidden');
+  hideAppPanels();
+  $('main-tabs').classList.remove('hidden');
   $('directory-view').classList.remove('hidden');
   await loadDirectory();
   renderDirectoryList();
@@ -2406,34 +2444,187 @@ function refreshCommissionDollars(){
   setCommDollarsEl('qs-note-dollars', noteAmt);
 }
 
-function chicagoCalendarYear(){
-  return Number(new Intl.DateTimeFormat('en-US', { timeZone: 'America/Chicago', year: 'numeric' }).format(new Date()));
+function chicagoDateParts(d){
+  const parts = new Intl.DateTimeFormat('en-US', {
+    timeZone: 'America/Chicago', year: 'numeric', month: 'numeric', day: 'numeric'
+  }).formatToParts(d || new Date());
+  const get = type => Number(parts.find(p => p.type === type).value);
+  return { year: get('year'), month: get('month'), day: get('day') };
 }
 
-function renderYtdTally(){
-  const box = $('ytd-tally');
-  if (!box) return;
-  const year = chicagoCalendarYear();
-  const closed = (txnCache || []).filter(t =>
-    t.status === 'closed' && t.closing_date && String(t.closing_date).slice(0, 4) === String(year)
-  );
+function chicagoCalendarYear(){
+  return chicagoDateParts().year;
+}
+
+function chicagoTodayYmd(){
+  const { year, month, day } = chicagoDateParts();
+  return `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+}
+
+const PROD_MONTH_NAMES = ['January','February','March','April','May','June','July','August','September','October','November','December'];
+let prodPeriod = 'month';
+let prodYear = null;
+let prodMonth = null;
+
+function closedProductionDeals(){
+  return (txnCache || []).filter(t => t.status === 'closed' && t.closing_date);
+}
+
+function productionDateBounds(){
+  const now = chicagoDateParts();
+  const dates = closedProductionDeals().map(t => String(t.closing_date)).filter(Boolean).sort();
+  const earliest = dates[0] || `${now.year}-${String(now.month).padStart(2, '0')}-01`;
+  return {
+    minYear: Number(earliest.slice(0, 4)),
+    minMonth: Number(earliest.slice(5, 7)),
+    maxYear: now.year,
+    maxMonth: now.month
+  };
+}
+
+function ensureProdPeriodDefaults(){
+  const now = chicagoDateParts();
+  if (prodYear == null) prodYear = now.year;
+  if (prodMonth == null) prodMonth = now.month;
+}
+
+function dealsForProductionPeriod(){
+  const closed = closedProductionDeals();
+  const today = chicagoTodayYmd();
+  const now = chicagoDateParts();
+  if (prodPeriod === 'ytd') {
+    const start = `${now.year}-01-01`;
+    return closed.filter(t => t.closing_date >= start && t.closing_date <= today);
+  }
+  if (prodPeriod === 'year') {
+    const y = String(prodYear);
+    return closed.filter(t => String(t.closing_date).slice(0, 4) === y);
+  }
+  const ym = `${prodYear}-${String(prodMonth).padStart(2, '0')}`;
+  return closed.filter(t => String(t.closing_date).slice(0, 7) === ym);
+}
+
+function tallyProduction(deals){
   let volume = 0;
   let gci = 0;
-  closed.forEach(t => {
+  deals.forEach(t => {
     const vol = dealVolume(t);
     if (vol != null) volume += vol;
     const comm = dealGci(t);
     if (comm != null) gci += comm;
   });
-  box.innerHTML = `
-    <div class="ytd-tally-title">${year} production</div>
+  return { volume, gci, units: deals.length };
+}
+
+function prodPeriodTitle(){
+  const now = chicagoDateParts();
+  if (prodPeriod === 'ytd') return `YTD ${now.year}`;
+  if (prodPeriod === 'year') return String(prodYear);
+  return `${PROD_MONTH_NAMES[prodMonth - 1]} ${prodYear}`;
+}
+
+function canShiftProdPeriod(dir){
+  if (prodPeriod === 'ytd') return false;
+  const b = productionDateBounds();
+  if (prodPeriod === 'year') {
+    const next = prodYear + dir;
+    return next >= b.minYear && next <= b.maxYear;
+  }
+  let y = prodYear;
+  let m = prodMonth + dir;
+  if (m < 1) { m = 12; y -= 1; }
+  if (m > 12) { m = 1; y += 1; }
+  if (y < b.minYear || (y === b.minYear && m < b.minMonth)) return false;
+  if (y > b.maxYear || (y === b.maxYear && m > b.maxMonth)) return false;
+  return true;
+}
+
+function shiftProdPeriod(dir){
+  if (!canShiftProdPeriod(dir)) return;
+  if (prodPeriod === 'year') {
+    prodYear += dir;
+  } else {
+    prodMonth += dir;
+    if (prodMonth < 1) { prodMonth = 12; prodYear -= 1; }
+    if (prodMonth > 12) { prodMonth = 1; prodYear += 1; }
+  }
+  renderProduction();
+}
+
+function setProdPeriod(which){
+  const now = chicagoDateParts();
+  prodPeriod = which;
+  prodYear = now.year;
+  prodMonth = now.month;
+  document.querySelectorAll('#prod-period-tabs .filter-tab').forEach(btn => {
+    btn.classList.toggle('active', btn.dataset.prodPeriod === which);
+  });
+  renderProduction();
+}
+
+function renderProduction(){
+  ensureProdPeriodDefaults();
+  const deals = dealsForProductionPeriod().slice().sort((a, b) =>
+    String(b.closing_date).localeCompare(String(a.closing_date))
+  );
+  const { volume, gci, units } = tallyProduction(deals);
+  const nav = $('prod-period-nav');
+  nav.classList.toggle('hidden', prodPeriod === 'ytd');
+  $('prod-period-label').textContent = prodPeriodTitle();
+  $('prod-prev').disabled = !canShiftProdPeriod(-1);
+  $('prod-next').disabled = !canShiftProdPeriod(1);
+
+  $('prod-tally').innerHTML = `
+    <div class="ytd-tally-title">${escapeHtml(prodPeriodTitle())} production</div>
     <div class="ytd-tally-grid">
       <div class="ytd-stat"><span class="ytd-stat-label">Volume</span><span class="ytd-stat-val">${formatCommissionMoney(volume) || '$0'}</span></div>
       <div class="ytd-stat"><span class="ytd-stat-label">GCI</span><span class="ytd-stat-val">${formatCommissionMoney(gci) || '$0'}</span></div>
-      <div class="ytd-stat"><span class="ytd-stat-label">Closed</span><span class="ytd-stat-val">${closed.length}</span></div>
+      <div class="ytd-stat"><span class="ytd-stat-label">Closed</span><span class="ytd-stat-val">${units}</span></div>
     </div>
   `;
+
+  const list = $('prod-deal-list');
+  const empty = $('prod-empty');
+  list.innerHTML = '';
+  if (deals.length === 0) {
+    empty.classList.remove('hidden');
+    return;
+  }
+  empty.classList.add('hidden');
+  deals.forEach(t => {
+    const vol = dealVolume(t);
+    const comm = dealGci(t);
+    const meta = [
+      t.closing_date ? formatShortDate(t.closing_date) : null,
+      vol != null ? 'Vol ' + formatCommissionMoney(vol) : null,
+      comm != null ? 'GCI ' + formatCommissionMoney(comm) : 'GCI —'
+    ].filter(Boolean).join(' · ');
+    const card = document.createElement('div');
+    card.className = 'prod-deal';
+    card.innerHTML = `
+      <div class="prod-deal-addr">${escapeHtml(t.property_address || '')}</div>
+      <div class="prod-deal-meta">${escapeHtml(meta)}</div>
+    `;
+    card.addEventListener('click', () => openTransaction(t.id));
+    list.appendChild(card);
+  });
 }
+
+async function showProduction(){
+  currentTxnId = null;
+  hideAppPanels();
+  $('main-tabs').classList.remove('hidden');
+  $('production-view').classList.remove('hidden');
+  setTab('production');
+  await loadTransactions();
+  renderProduction();
+}
+
+document.querySelectorAll('#prod-period-tabs .filter-tab').forEach(btn => {
+  btn.addEventListener('click', () => setProdPeriod(btn.dataset.prodPeriod));
+});
+$('prod-prev').addEventListener('click', () => shiftProdPeriod(-1));
+$('prod-next').addEventListener('click', () => shiftProdPeriod(1));
 
 async function saveDealField(column, value){
   await db.from('transactions').update({ [column]: value }).eq('id', currentTxnId);
@@ -3373,10 +3564,7 @@ $('template-side').addEventListener('change', loadTemplateEditor);
 
 async function showTemplateEditor(){
   currentTxnId = null;
-  $('list-view').classList.add('hidden');
-  $('my-tasks-view').classList.add('hidden');
-  $('detail-view').classList.add('hidden');
-  $('directory-view').classList.add('hidden');
+  hideAppPanels();
   $('main-tabs').classList.add('hidden');
   $('template-view').classList.remove('hidden');
   await loadTemplateEditor();
