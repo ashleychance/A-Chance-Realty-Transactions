@@ -272,11 +272,27 @@
     font-weight:600; cursor:pointer; padding:0; margin-bottom:14px; display:flex; align-items:center; gap:4px;
   }
   #detail-sticky{
-    position:sticky; top:0; z-index:9;
+    position:fixed;
+    top:0;
+    left:0;
+    right:0;
+    z-index:12;
     background:var(--bg);
-    margin:0 0 12px;
+    padding:10px 16px 8px;
+    min-width:0;
+    max-width:100%;
+    box-sizing:border-box;
+  }
+  #detail-sticky-inner{
+    max-width:640px;
+    margin:0 auto;
     min-width:0;
   }
+  #detail-sticky-spacer{
+    height:186px;
+    min-width:0;
+  }
+  #detail-view.is-header-compact #detail-sticky-spacer{ height:70px; }
   .deal-banner{
     position:relative;
     height:168px;
@@ -325,13 +341,22 @@
     padding:8px 12px 8px 72px;
     align-items:center;
   }
+  .deal-banner-titles{ flex:1; min-width:0; }
   .deal-banner-bar h1{
-    flex:1; min-width:0; margin:0;
+    margin:0;
     color:#fff; font-size:20px; font-weight:600;
     overflow-wrap:anywhere; line-height:1.2;
     text-shadow:0 1px 4px rgba(0,0,0,.75);
   }
   .deal-banner.is-compact .deal-banner-bar h1{ font-size:15px; }
+  .deal-banner-sub{
+    color:rgba(255,255,255,.9);
+    font-size:13px;
+    font-weight:600;
+    overflow-wrap:anywhere;
+    text-shadow:0 1px 3px rgba(0,0,0,.7);
+  }
+  .deal-banner.is-compact .deal-banner-sub{ font-size:12px; }
   .deal-banner-edit{
     flex:0 0 auto;
     background:rgba(255,255,255,.18); color:#fff; border:none;
@@ -811,17 +836,23 @@
     <!-- DETAIL VIEW -->
     <div id="detail-view" class="hidden">
       <div id="detail-sticky">
-        <div id="deal-banner" class="deal-banner">
-          <div id="deal-banner-fallback" class="deal-banner-fallback" aria-hidden="true"></div>
-          <img id="deal-banner-img" class="deal-banner-img hidden" alt="">
-          <div class="deal-banner-shade"></div>
-          <button type="button" class="deal-banner-back" id="back-btn">&larr; Back</button>
-          <div class="deal-banner-bar">
-            <h1 id="detail-address"></h1>
-            <button class="edit-task-btn deal-banner-edit" id="edit-txn-btn" title="Edit transaction details">✎</button>
+        <div id="detail-sticky-inner">
+          <div id="deal-banner" class="deal-banner">
+            <div id="deal-banner-fallback" class="deal-banner-fallback" aria-hidden="true"></div>
+            <img id="deal-banner-img" class="deal-banner-img hidden" alt="">
+            <div class="deal-banner-shade"></div>
+            <button type="button" class="deal-banner-back" id="back-btn">&larr; Back</button>
+            <div class="deal-banner-bar">
+              <div class="deal-banner-titles">
+                <h1 id="detail-address"></h1>
+                <div id="detail-banner-sub" class="deal-banner-sub hidden"></div>
+              </div>
+              <button class="edit-task-btn deal-banner-edit" id="edit-txn-btn" title="Edit transaction details">✎</button>
+            </div>
           </div>
         </div>
       </div>
+      <div id="detail-sticky-spacer" aria-hidden="true"></div>
       <div class="detail-head">
         <div class="client" id="detail-client"></div>
         <div class="mls-line" id="detail-mls"></div>
@@ -1389,6 +1420,7 @@ function setTab(which){
 function hideAppPanels(){
   ['list-view','production-view','my-tasks-view','directory-view','template-view','detail-view']
     .forEach(id => $(id).classList.add('hidden'));
+  $('detail-view').classList.remove('is-header-compact');
   const topbar = document.querySelector('header.topbar');
   if (topbar) topbar.classList.remove('hidden');
 }
@@ -1753,12 +1785,15 @@ async function openTransaction(id, focusTaskId){
   if (topbar) topbar.classList.add('hidden');
   $('main-tabs').classList.add('hidden');
   $('detail-view').classList.remove('hidden');
+  $('detail-view').classList.remove('is-header-compact');
   const banner = $('deal-banner');
   if (banner) banner.classList.remove('is-compact');
+  window.scrollTo(0, 0);
 
   const { data: t } = await db.from('transactions').select('*').eq('id', id).single();
   currentTxn = t;
   $('detail-address').textContent = t.property_address;
+  setDealBannerSub(t);
   $('detail-client').textContent = t.client_name || '';
   $('detail-mls').textContent = t.mls_number ? `MLS# ${t.mls_number}` : '';
 
@@ -2773,6 +2808,7 @@ async function refreshDealBanner(){
   const img = $('deal-banner-img');
   const addr = $('detail-address');
   if (addr && currentTxn) addr.textContent = currentTxn.property_address || '';
+  if (currentTxn) setDealBannerSub(currentTxn);
   if (!img) return;
   const raw = currentTxn && currentTxn.primary_photo_url;
   if (!raw) {
@@ -2786,10 +2822,21 @@ async function refreshDealBanner(){
   img.classList.remove('hidden');
 }
 
+function setDealBannerSub(txn){
+  const el = $('detail-banner-sub');
+  if (!el) return;
+  const line = txn && txn.mls_number ? `MLS# ${txn.mls_number}` : '';
+  el.textContent = line;
+  el.classList.toggle('hidden', !line);
+}
+
 function updateDealBannerCompact(){
+  const view = $('detail-view');
   const banner = $('deal-banner');
-  if (!banner || $('detail-view').classList.contains('hidden')) return;
-  banner.classList.toggle('is-compact', window.scrollY > 28);
+  if (!banner || !view || view.classList.contains('hidden')) return;
+  const compact = window.scrollY > 28;
+  banner.classList.toggle('is-compact', compact);
+  view.classList.toggle('is-header-compact', compact);
 }
 window.addEventListener('scroll', updateDealBannerCompact, { passive: true });
 
@@ -3691,6 +3738,7 @@ $('edit-txn-save').addEventListener('click', async () => {
   currentTxn.mls_number = mls || null;
   currentTxn.client_name = client || null;
   $('detail-address').textContent = address;
+  setDealBannerSub(currentTxn);
   $('detail-mls').textContent = mls ? `MLS# ${mls}` : '';
   $('detail-client').textContent = client || '';
   $('edit-txn-modal').classList.add('hidden');
